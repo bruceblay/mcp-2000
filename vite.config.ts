@@ -42,6 +42,17 @@ const singlePadPlanSchema = z.object({
   }),
 })
 
+const loopPlanSchema = z.object({
+  summary: z.string(),
+  loop: z.object({
+    sampleName: z.string().min(1).max(56),
+    prompt: z.string().min(1).max(320),
+    durationSeconds: z.number().min(3).max(30),
+    promptInfluence: z.number().min(0).max(1),
+    bpm: z.number().int().min(60).max(180),
+  }),
+})
+
 const readJsonBody = async (req: IncomingMessage) => {
   const chunks: Uint8Array[] = []
 
@@ -87,9 +98,18 @@ const buildSinglePadPlannerPrompt = (userPrompt: string, pad: Pad) =>
     'The result should be bold and specific, not generic or neutral.',
   ].join('\n\n')
 
+const buildLoopPlannerPrompt = (userPrompt: string) =>
+  [
+    'User prompt: ' + userPrompt,
+    'Create one looping sample generation prompt for an MPC-inspired chop source.',
+    'The result should be a cohesive loop, not a single hit.',
+    'Favor loops that are rich enough to chop into multiple slices.',
+    'Return a descriptive sampleName, a BPM, and a duration between 4 and 16 seconds unless the prompt strongly implies something else.',
+  ].join('\n\n')
+
 const generateElevenLabsSample = async (
   apiKey: string,
-  planItem: { prompt: string; durationSeconds: number; promptInfluence: number },
+  planItem: { prompt: string; durationSeconds: number; promptInfluence: number; loop?: boolean },
 ) => {
   const response = await fetch('https://api.elevenlabs.io/v1/sound-generation', {
     method: 'POST',
@@ -102,6 +122,7 @@ const generateElevenLabsSample = async (
       text: planItem.prompt,
       duration_seconds: planItem.durationSeconds,
       prompt_influence: planItem.promptInfluence,
+      loop: planItem.loop ?? false,
     }),
   })
 
@@ -150,6 +171,30 @@ export default defineConfig(({ mode }) => {
     } satisfies Pad
   }
 
+  const generateLoopFromPlan = async (
+    generatedDir: string,
+    loopPlan: { sampleName: string; prompt: string; durationSeconds: number; promptInfluence: number; bpm: number },
+  ) => {
+    const audioBuffer = await generateElevenLabsSample(env.ELEVENLABS_API_KEY, {
+      prompt: loopPlan.prompt,
+      durationSeconds: loopPlan.durationSeconds,
+      promptInfluence: loopPlan.promptInfluence,
+      loop: true,
+    })
+    const fileName = Date.now() + '-loop-' + slugify(loopPlan.sampleName) + '.mp3'
+    await writeFile(join(generatedDir, fileName), audioBuffer)
+
+    return {
+      sampleName: loopPlan.sampleName,
+      sampleFile: fileName,
+      sampleUrl: '/generated/' + encodeURIComponent(fileName),
+      durationLabel: loopPlan.durationSeconds.toFixed(1) + 's loop',
+      durationSeconds: loopPlan.durationSeconds,
+      bpm: loopPlan.bpm,
+      sourceType: 'generated' as const,
+    }
+  }
+
   const generateKitHandler = async (
     req: IncomingMessage,
     res: ServerResponse,
@@ -181,7 +226,40 @@ export default defineConfig(({ mode }) => {
       await mkdir(generatedDir, { recursive: true })
 
       if (parsedRequest.mode === 'loop') {
-        sendJson(res, 501, { error: 'Loop generation is the next generation mode to implement.' })
+        const loopResult = await generateText({
+          model: anthropic('claude-sonnet-4-5'),
+          temperature: 0.85,
+          toolChoice: { type: 'tool', toolName: 'submitLoopPlan' },
+          system: [
+            'You are designing a loop for an MPC-inspired sampler workflow.',
+            'Return one cohesive loop plan that will be good for chopping into pads.',
+            'The loop should be stylistically committed and sampleable, not generic background filler.',
+            'You must call submitLoopPlan exactly once.',
+          ].join(' '),
+          prompt: buildLoopPlannerPrompt(parsedRequest.prompt),
+          tools: {
+            submitLoopPlan: tool({
+              description: 'Submit one loop-generation plan for a chop-ready sample.',
+              inputSchema: loopPlanSchema,
+              execute: async (input) => input,
+            }),
+          },
+        })
+
+        const toolResult = loopResult.toolResults.find((entry) => entry.toolName === 'submitLoopPlan')
+        if (!toolResult || toolResult.type !== 'tool-result') {
+          sendJson(res, 500, { error: 'Anthropic did not return a loop generation plan.' })
+          return
+        }
+
+        const output = loopPlanSchema.parse(toolResult.output)
+        const generatedLoop = await generateLoopFromPlan(generatedDir, output.loop)
+
+        sendJson(res, 200, {
+          bankId: parsedRequest.bankId,
+          summary: output.summary,
+          generatedLoop,
+        })
         return
       }
 

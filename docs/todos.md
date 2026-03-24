@@ -18,3 +18,9 @@
 - generative pattern creation
 - mute pad or bank
 - rename session to project, have a projects select
+- per pad panning
+- isolate sounds or instruments on an input sample
+- record from microphone
+- generate new sample based off mic input
+- master volume
+- 
