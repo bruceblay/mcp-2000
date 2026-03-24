@@ -1,10 +1,8 @@
 - design looks horrible
 - tempo slider
 - envelope
-- fx send with fx
 - export to wav
 - sequencer
-- pads loaded values looks wrong
 - chromatic keyboard mode
 - sample editor?
 - recording parameter automation
@@ -12,15 +10,15 @@
 - loop, gate, reverse
 - edit sample type/description text
 - edit pad color(s)
-- sample waveform chopper, auto chopper
+- auto chopper
 - note repeat
 - arpeggiator
 - generative pattern creation
 - mute pad or bank
 - rename session to project, have a projects select
-- per pad panning
 - isolate sounds or instruments on an input sample
 - record from microphone
 - generate new sample based off mic input
 - master volume
+- punch in record keypresses instead of step sequencing
 - 

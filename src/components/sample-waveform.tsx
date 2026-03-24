@@ -16,10 +16,12 @@ type SampleWaveformProps = {
   playheadFraction?: number | null
   markerStartFraction?: number | null
   markerEndFraction?: number | null
+  reversed?: boolean
   onStatusChange?: (status: WaveformStatus) => void
   onRegionSelect?: (region: WaveformRegion) => void
   onRegionsChange?: (regions: WaveformRegion[]) => void
   onMarkerChange?: (field: MarkerDragField, nextFraction: number) => void
+  onWaveformClick?: () => void
 }
 
 type DecodedWaveform = {
@@ -156,10 +158,12 @@ export function SampleWaveform({
   playheadFraction = null,
   markerStartFraction = null,
   markerEndFraction = null,
+  reversed = false,
   onStatusChange,
   onRegionSelect,
   onRegionsChange,
   onMarkerChange,
+  onWaveformClick,
 }: SampleWaveformProps) {
   const [fallbackPeaks, setFallbackPeaks] = useState<number[]>([])
   const [durationSeconds, setDurationSeconds] = useState<number>(0)
@@ -176,6 +180,11 @@ export function SampleWaveform({
   const emptyMessage = useMemo(() => {
     return audioUrl ? null : 'Generate or select audio to inspect it here.'
   }, [audioUrl])
+
+  const displayPeaks = useMemo(() => (reversed ? [...fallbackPeaks].reverse() : fallbackPeaks), [fallbackPeaks, reversed])
+  const visualMarkerStartFraction = reversed ? 1 - (markerEndFraction ?? 1) : markerStartFraction ?? 0
+  const visualMarkerEndFraction = reversed ? 1 - (markerStartFraction ?? 0) : markerEndFraction ?? 1
+  const visualPlayheadFraction = playheadFraction === null ? null : reversed ? 1 - playheadFraction : playheadFraction
 
   useEffect(() => {
     const canvas = fallbackCanvasRef.current
@@ -197,7 +206,7 @@ export function SampleWaveform({
     context.setTransform(dpr, 0, 0, dpr, 0, 0)
     context.clearRect(0, 0, width, height)
 
-    if (fallbackPeaks.length === 0) {
+    if (displayPeaks.length === 0) {
       context.strokeStyle = 'rgba(70, 78, 82, 0.35)'
       context.beginPath()
       context.moveTo(0, height / 2)
@@ -207,13 +216,13 @@ export function SampleWaveform({
     }
 
     const middle = height / 2
-    const step = width / fallbackPeaks.length
+    const step = width / displayPeaks.length
 
     context.strokeStyle = '#7a6047'
     context.lineWidth = 1
     context.beginPath()
 
-    fallbackPeaks.forEach((peak, index) => {
+    displayPeaks.forEach((peak, index) => {
       const x = index * step
       const amplitude = Math.max(1, peak * (height * 0.46))
       context.moveTo(x, middle - amplitude / 2)
@@ -221,7 +230,7 @@ export function SampleWaveform({
     })
 
     context.stroke()
-  }, [fallbackPeaks])
+  }, [displayPeaks])
 
   useEffect(() => {
     if (!audioUrl) {
@@ -295,12 +304,13 @@ export function SampleWaveform({
       const updateFromPointer = (clientX: number) => {
         const bounds = overlay.getBoundingClientRect()
         const relative = Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width))
+        const mappedRelative = reversed ? 1 - relative : relative
         if (field === 'start') {
-          markerChangeRef.current?.('start', Math.min(relative, endFraction - 0.01))
+          markerChangeRef.current?.('start', Math.min(mappedRelative, endFraction - 0.01))
           return
         }
 
-        markerChangeRef.current?.('end', Math.max(relative, startFraction + 0.01))
+        markerChangeRef.current?.('end', Math.max(mappedRelative, startFraction + 0.01))
       }
 
       const handlePointerMove = (event: PointerEvent) => {
@@ -329,12 +339,12 @@ export function SampleWaveform({
 
     const handleStartPointerDown = (event: PointerEvent) => {
       event.preventDefault()
-      beginDrag('start', event.pointerId)
+      beginDrag(reversed ? 'end' : 'start', event.pointerId)
     }
 
     const handleEndPointerDown = (event: PointerEvent) => {
       event.preventDefault()
-      beginDrag('end', event.pointerId)
+      beginDrag(reversed ? 'start' : 'end', event.pointerId)
     }
 
     startHandle?.addEventListener('pointerdown', handleStartPointerDown)
@@ -344,7 +354,7 @@ export function SampleWaveform({
       startHandle?.removeEventListener('pointerdown', handleStartPointerDown)
       endHandle?.removeEventListener('pointerdown', handleEndPointerDown)
     }
-  }, [markerEndFraction, markerStartFraction])
+  }, [markerEndFraction, markerStartFraction, reversed])
 
   useEffect(() => {
     const overlay = regionsOverlayRef.current
@@ -434,8 +444,20 @@ export function SampleWaveform({
 
   const hasTrimMarkers = markerStartFraction !== null && markerEndFraction !== null && onMarkerChange
 
+  const handleWaveformPointerDown = () => {
+    if (regions.length > 0 || !onWaveformClick) {
+      return
+    }
+
+    onWaveformClick()
+  }
+
   return (
-    <div className="sample-waveform" aria-label="Sample editor waveform">
+    <div
+      className={onWaveformClick && regions.length === 0 ? 'sample-waveform is-auditionable' : 'sample-waveform'}
+      aria-label="Sample editor waveform"
+      onPointerDown={handleWaveformPointerDown}
+    >
       <canvas
         ref={fallbackCanvasRef}
         className={audioUrl ? 'sample-waveform__fallback' : 'sample-waveform__fallback is-empty'}
@@ -465,26 +487,26 @@ export function SampleWaveform({
         <div ref={trimOverlayRef} className="sample-waveform__trim-overlay" aria-hidden="true">
           <div
             className="sample-waveform__trim-mask sample-waveform__trim-mask--start"
-            style={{ width: `${Math.max(0, markerStartFraction ?? 0) * 100}%` }}
+            style={{ width: `${Math.max(0, visualMarkerStartFraction) * 100}%` }}
           />
           <div
             className="sample-waveform__trim-mask sample-waveform__trim-mask--end"
-            style={{ width: `${Math.max(0, 1 - (markerEndFraction ?? 1)) * 100}%` }}
+            style={{ width: `${Math.max(0, 1 - visualMarkerEndFraction) * 100}%` }}
           />
           <div
             className="sample-waveform__trim-handle"
             data-marker-handle="start"
-            style={{ left: `${(markerStartFraction ?? 0) * 100}%` }}
+            style={{ left: `${visualMarkerStartFraction * 100}%` }}
           />
           <div
             className="sample-waveform__trim-handle"
             data-marker-handle="end"
-            style={{ left: `${(markerEndFraction ?? 1) * 100}%` }}
+            style={{ left: `${visualMarkerEndFraction * 100}%` }}
           />
         </div>
       ) : null}
-      {playheadFraction !== null ? (
-        <div className="sample-waveform__playhead" style={{ left: `${playheadFraction * 100}%` }} aria-hidden="true" />
+      {visualPlayheadFraction !== null ? (
+        <div className="sample-waveform__playhead" style={{ left: `${visualPlayheadFraction * 100}%` }} aria-hidden="true" />
       ) : null}
       {emptyMessage ? <div className="sample-waveform__empty">{emptyMessage}</div> : null}
     </div>
