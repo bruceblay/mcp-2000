@@ -9,8 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.64",
+    "ai": "^6.0.137",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/react": "^19.1.2",
