@@ -1,0 +1,11 @@
+- design looks horrible
+- tempo slider
+- trim and pitch sliders
+- envelope
+- fx send with fx
+- export to wav
+- sequencer
+- pads loaded values looks wrong
+- banks
+- chromatic keyboard mode
+- sample editor?

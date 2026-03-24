@@ -1,33 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { mockKitPads, type Pad, type PadSourceType } from './mock-kit'
 
-type Pad = {
-  id: string
-  label: string
-  keyTrigger: string
-  group: 'drums' | 'textures' | 'melodic' | 'fx'
-  sampleName: string
-  sourceType: 'generated' | 'uploaded' | 'resampled'
-  durationLabel: string
-}
-
-const pads: Pad[] = [
-  { id: 'pad-1', label: 'Kick 01', keyTrigger: '1', group: 'drums', sampleName: 'Dust Kick', sourceType: 'generated', durationLabel: '0.82 sec' },
-  { id: 'pad-2', label: 'Snare 02', keyTrigger: '2', group: 'drums', sampleName: 'Tape Snare', sourceType: 'generated', durationLabel: '0.61 sec' },
-  { id: 'pad-3', label: 'Hat 03', keyTrigger: '3', group: 'drums', sampleName: 'Soft Hat', sourceType: 'generated', durationLabel: '0.18 sec' },
-  { id: 'pad-4', label: 'Perc 04', keyTrigger: '4', group: 'drums', sampleName: 'Clack Rim', sourceType: 'uploaded', durationLabel: '0.27 sec' },
-  { id: 'pad-5', label: 'Chord 05', keyTrigger: 'Q', group: 'textures', sampleName: 'Soul Wash', sourceType: 'generated', durationLabel: '2.40 sec' },
-  { id: 'pad-6', label: 'Vox 06', keyTrigger: 'W', group: 'textures', sampleName: 'Air Phrase', sourceType: 'generated', durationLabel: '1.73 sec' },
-  { id: 'pad-7', label: 'Dust 07', keyTrigger: 'E', group: 'textures', sampleName: 'Room Hiss', sourceType: 'uploaded', durationLabel: '4.00 sec' },
-  { id: 'pad-8', label: 'Rise 08', keyTrigger: 'R', group: 'fx', sampleName: 'Filtered Rise', sourceType: 'generated', durationLabel: '1.95 sec' },
-  { id: 'pad-9', label: 'Bass 09', keyTrigger: 'A', group: 'melodic', sampleName: 'Mono Bass', sourceType: 'generated', durationLabel: '0.93 sec' },
-  { id: 'pad-10', label: 'Stab 10', keyTrigger: 'S', group: 'melodic', sampleName: 'Neo Chord', sourceType: 'generated', durationLabel: '1.12 sec' },
-  { id: 'pad-11', label: 'Lead 11', keyTrigger: 'D', group: 'melodic', sampleName: 'Glass Lead', sourceType: 'resampled', durationLabel: '0.74 sec' },
-  { id: 'pad-12', label: 'Loop 12', keyTrigger: 'F', group: 'melodic', sampleName: '88 BPM Loop', sourceType: 'generated', durationLabel: '4.00 sec' },
-  { id: 'pad-13', label: 'Crash 13', keyTrigger: 'Z', group: 'fx', sampleName: 'Tape Crash', sourceType: 'uploaded', durationLabel: '1.38 sec' },
-  { id: 'pad-14', label: 'FX 14', keyTrigger: 'X', group: 'fx', sampleName: 'Reverse Hit', sourceType: 'generated', durationLabel: '0.89 sec' },
-  { id: 'pad-15', label: 'Fill 15', keyTrigger: 'C', group: 'fx', sampleName: 'Vinyl Fill', sourceType: 'resampled', durationLabel: '1.20 sec' },
-  { id: 'pad-16', label: 'Scene 16', keyTrigger: 'V', group: 'fx', sampleName: 'Transition Bed', sourceType: 'generated', durationLabel: '3.80 sec' },
-]
+const pads = mockKitPads
+const totalPads = pads.length
 
 const promptPresets = [
   'Boom bap drum kit with dusty hats and a warm vinyl kick',
@@ -42,17 +17,148 @@ const groupLabels: Record<Pad['group'], string> = {
   fx: 'FX',
 }
 
-const sourceLabels: Record<Pad['sourceType'], string> = {
+const sourceLabels: Record<PadSourceType, string> = {
   generated: 'Generated',
   uploaded: 'Uploaded',
   resampled: 'Resampled',
 }
 
+type EngineStatus = 'idle' | 'loading' | 'ready' | 'error'
+
+type PadPlaybackSetting = {
+  startFraction: number
+  endFraction: number
+}
+
+const createInitialPlaybackSettings = () =>
+  Object.fromEntries(
+    pads.map((pad) => [pad.id, { startFraction: 0, endFraction: 1 }]),
+  ) as Record<string, PadPlaybackSetting>
+
 function App() {
   const [selectedPadId, setSelectedPadId] = useState(pads[0].id)
   const [activePadIds, setActivePadIds] = useState<string[]>([])
+  const [engineStatus, setEngineStatus] = useState<EngineStatus>('idle')
+  const [loadedPadCount, setLoadedPadCount] = useState(0)
+  const [padPlaybackSettings, setPadPlaybackSettings] = useState<Record<string, PadPlaybackSetting>>(
+    () => createInitialPlaybackSettings(),
+  )
 
-  const selectedPad = pads.find((pad) => pad.id === selectedPadId) ?? pads[0]
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const masterGainRef = useRef<GainNode | null>(null)
+  const bufferMapRef = useRef<Map<string, AudioBuffer>>(new Map())
+  const loadPromiseRef = useRef<Promise<void> | null>(null)
+
+  const selectedPad = useMemo(
+    () => pads.find((pad) => pad.id === selectedPadId) ?? pads[0],
+    [selectedPadId],
+  )
+
+  const selectedPadSettings = padPlaybackSettings[selectedPad.id]
+  const trimStartPercent = Math.round(selectedPadSettings.startFraction * 100)
+  const trimEndPercent = Math.round(selectedPadSettings.endFraction * 100)
+
+  useEffect(() => {
+    return () => {
+      if (audioContextRef.current) {
+        void audioContextRef.current.close()
+      }
+    }
+  }, [])
+
+  const getAudioContext = () => {
+    if (!audioContextRef.current) {
+      const context = new window.AudioContext()
+      const masterGain = context.createGain()
+      masterGain.gain.value = 0.9
+      masterGain.connect(context.destination)
+      audioContextRef.current = context
+      masterGainRef.current = masterGain
+    }
+
+    return audioContextRef.current
+  }
+
+  const ensureAudioEngine = async () => {
+    if (engineStatus === 'ready') {
+      const context = getAudioContext()
+      if (context.state === 'suspended') {
+        await context.resume()
+      }
+      return
+    }
+
+    if (loadPromiseRef.current) {
+      await loadPromiseRef.current
+      return
+    }
+
+    const loadTask = (async () => {
+      try {
+        setEngineStatus('loading')
+        setLoadedPadCount(0)
+
+        const context = getAudioContext()
+        if (context.state === 'suspended') {
+          await context.resume()
+        }
+
+        const decodedBuffers = await Promise.all(
+          pads.map(async (pad, index) => {
+            const response = await fetch(pad.sampleUrl)
+            if (!response.ok) {
+              throw new Error('Failed to fetch sample: ' + pad.sampleFile)
+            }
+
+            const audioData = await response.arrayBuffer()
+            const buffer = await context.decodeAudioData(audioData.slice(0))
+            setLoadedPadCount(index + 1)
+            return [pad.id, buffer] as const
+          }),
+        )
+
+        bufferMapRef.current = new Map(decodedBuffers)
+        setEngineStatus('ready')
+      } catch (error) {
+        console.error(error)
+        bufferMapRef.current.clear()
+        setEngineStatus('error')
+      } finally {
+        loadPromiseRef.current = null
+      }
+    })()
+
+    loadPromiseRef.current = loadTask
+    await loadTask
+  }
+
+  const playPadAudio = useEffectEvent(async (padId: string) => {
+    await ensureAudioEngine()
+
+    const context = audioContextRef.current
+    const masterGain = masterGainRef.current
+    const sampleBuffer = bufferMapRef.current.get(padId)
+    const pad = pads.find((item) => item.id === padId)
+    const playbackSettings = padPlaybackSettings[padId]
+
+    if (!context || !masterGain || !sampleBuffer || !pad || !playbackSettings) {
+      return
+    }
+
+    const startTime = sampleBuffer.duration * playbackSettings.startFraction
+    const endTime = sampleBuffer.duration * playbackSettings.endFraction
+    const playbackDuration = Math.max(0.01, endTime - startTime)
+
+    const source = context.createBufferSource()
+    const gainNode = context.createGain()
+
+    source.buffer = sampleBuffer
+    gainNode.gain.value = pad.gain
+
+    source.connect(gainNode)
+    gainNode.connect(masterGain)
+    source.start(0, startTime, playbackDuration)
+  })
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -70,15 +176,16 @@ function App() {
       const target = event.target
       if (
         target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLSelectElement
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLInputElement && target.type !== 'range')
       ) {
         return
       }
 
       event.preventDefault()
       setSelectedPadId(matchedPad.id)
-      setActivePadIds((current) => (current.includes(matchedPad.id) ? current : [...current, matchedPad.id]))
+      setActivePadIds((current) => (current.includes(matchedPad.id) ? current : current.concat(matchedPad.id)))
+      void playPadAudio(matchedPad.id)
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
@@ -99,16 +206,57 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [])
+  }, [playPadAudio])
 
   const triggerPad = (padId: string) => {
     setSelectedPadId(padId)
-    setActivePadIds((current) => (current.includes(padId) ? current : [...current, padId]))
+    setActivePadIds((current) => (current.includes(padId) ? current : current.concat(padId)))
+    void playPadAudio(padId)
   }
 
   const releasePad = (padId: string) => {
     setActivePadIds((current) => current.filter((currentPadId) => currentPadId !== padId))
   }
+
+  const updateTrim = (
+    padId: string,
+    field: 'startFraction' | 'endFraction',
+    nextPercent: number,
+  ) => {
+    setPadPlaybackSettings((current) => {
+      const existing = current[padId] ?? { startFraction: 0, endFraction: 1 }
+      const nextValue = nextPercent / 100
+
+      if (field === 'startFraction') {
+        const startFraction = Math.min(nextValue, existing.endFraction - 0.01)
+        return {
+          ...current,
+          [padId]: {
+            ...existing,
+            startFraction,
+          },
+        }
+      }
+
+      const endFraction = Math.max(nextValue, existing.startFraction + 0.01)
+      return {
+        ...current,
+        [padId]: {
+          ...existing,
+          endFraction,
+        },
+      }
+    })
+  }
+
+  const engineLabel =
+    engineStatus === 'ready'
+      ? 'Web Audio Ready'
+      : engineStatus === 'loading'
+        ? 'Loading Samples'
+        : engineStatus === 'error'
+          ? 'Engine Error'
+          : 'Web Audio Idle'
 
   return (
     <main className="app-shell">
@@ -127,12 +275,12 @@ function App() {
             <strong>92 BPM</strong>
           </div>
           <div>
-            <span className="transport-label">Pads Ready</span>
-            <strong>16 / 16</strong>
+            <span className="transport-label">Pads Loaded</span>
+            <strong>{loadedPadCount} / {totalPads}</strong>
           </div>
           <div>
             <span className="transport-label">Engine</span>
-            <strong>UI Shell</strong>
+            <strong>{engineLabel}</strong>
           </div>
         </div>
       </header>
@@ -175,7 +323,7 @@ function App() {
 
           <div className="grid-status" aria-label="Pad interaction status">
             <span>Selected: {selectedPad.label}</span>
-            <span>Trigger keys: 1 2 3 4 / Q W E R / A S D F / Z X C V</span>
+            <span>{engineStatus === 'ready' ? 'Low-latency buffer playback active' : 'First trigger will initialize the engine'}</span>
           </div>
 
           <div className="pad-grid" aria-label="Sample pad grid">
@@ -183,12 +331,11 @@ function App() {
               <button
                 key={pad.id}
                 type="button"
-                className={`pad pad-${pad.group}${selectedPad.id === pad.id ? ' is-selected' : ''}${activePadIds.includes(pad.id) ? ' is-active' : ''}`}
+                className={'pad pad-' + pad.group + (selectedPad.id === pad.id ? ' is-selected' : '') + (activePadIds.includes(pad.id) ? ' is-active' : '')}
                 aria-pressed={selectedPad.id === pad.id}
-                onClick={() => triggerPad(pad.id)}
-                onMouseDown={() => triggerPad(pad.id)}
-                onMouseUp={() => releasePad(pad.id)}
-                onMouseLeave={() => releasePad(pad.id)}
+                onPointerDown={() => triggerPad(pad.id)}
+                onPointerUp={() => releasePad(pad.id)}
+                onPointerLeave={() => releasePad(pad.id)}
                 onBlur={() => releasePad(pad.id)}
               >
                 <span className="pad-key">{pad.keyTrigger}</span>
@@ -219,20 +366,57 @@ function App() {
               <span className="transport-label">Length</span>
               <strong>{selectedPad.durationLabel}</strong>
             </div>
+            <div>
+              <span className="transport-label">Trim</span>
+              <strong>{trimStartPercent}% to {trimEndPercent}%</strong>
+            </div>
+            <div>
+              <span className="transport-label">Gain</span>
+              <strong>{selectedPad.gain.toFixed(2)}</strong>
+            </div>
+            <div>
+              <span className="transport-label">File</span>
+              <strong>{selectedPad.sampleFile}</strong>
+            </div>
+          </div>
+
+          <div className="trim-controls">
+            <label className="trim-control">
+              <span>Start</span>
+              <input
+                type="range"
+                min="0"
+                max="95"
+                value={trimStartPercent}
+                onChange={(event) => updateTrim(selectedPad.id, 'startFraction', Number(event.target.value))}
+              />
+              <strong>{trimStartPercent}%</strong>
+            </label>
+            <label className="trim-control">
+              <span>End</span>
+              <input
+                type="range"
+                min="5"
+                max="100"
+                value={trimEndPercent}
+                onChange={(event) => updateTrim(selectedPad.id, 'endFraction', Number(event.target.value))}
+              />
+              <strong>{trimEndPercent}%</strong>
+            </label>
           </div>
 
           <div className="parameter-list">
             <article>
               <span>Trim</span>
-              <strong>Start 0% · End 100%</strong>
+              <strong>{trimStartPercent}% to {trimEndPercent}%</strong>
             </article>
             <article>
               <span>Pitch</span>
               <strong>+0 semitones</strong>
             </article>
             <article>
-              <span>Envelope</span>
-              <strong>Short attack · Tight release</strong>
+              <span>Gain</span>
+              <strong>{selectedPad.gain.toFixed(2)}</strong>
             </article>
             <article>
               <span>FX Send</span>
