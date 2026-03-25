@@ -8,11 +8,20 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { z } from 'zod'
 
+const sequencePadContextSchema = z.object({
+  padId: z.string(),
+  label: z.string(),
+  sampleName: z.string(),
+  group: z.string(),
+})
+
 const requestSchema = z.object({
   prompt: z.string().min(1),
   bankId: z.enum(['A', 'B', 'C', 'D']).optional(),
-  mode: z.enum(['kit', 'pad', 'loop']).default('kit'),
+  mode: z.enum(['kit', 'pad', 'loop', 'sequence', 'random-sequence']).default('kit'),
   selectedPadId: z.string().optional(),
+  sequenceLength: z.number().int().min(8).max(32).optional(),
+  sequencePads: z.array(sequencePadContextSchema).length(16).optional(),
 })
 
 const allTemplatePads = bankKits.A
@@ -51,6 +60,16 @@ const loopPlanSchema = z.object({
     promptInfluence: z.number().min(0).max(1),
     bpm: z.number().int().min(60).max(180),
   }),
+})
+
+const sequenceLaneSchema = z.object({
+  padId: z.string(),
+  activeSteps: z.array(z.number().int().min(1).max(32)).max(32),
+})
+
+const sequencePlanSchema = z.object({
+  summary: z.string(),
+  lanes: z.array(sequenceLaneSchema).length(16),
 })
 
 const readJsonBody = async (req: IncomingMessage) => {
@@ -105,6 +124,31 @@ const buildLoopPlannerPrompt = (userPrompt: string) =>
     'The result should be a cohesive loop, not a single hit.',
     'Favor loops that are rich enough to chop into multiple slices.',
     'Return a descriptive sampleName, a BPM, and a duration between 4 and 16 seconds unless the prompt strongly implies something else.',
+  ].join('\n\n')
+
+const buildSequencePlannerPrompt = (userPrompt: string, sequenceLength: number, pads: Array<{ padId: string; label: string; sampleName: string; group: string }>) =>
+  [
+    'User prompt: ' + userPrompt,
+    'Create a playable step sequence for this MPC-style bank.',
+    'Sequence length: ' + sequenceLength + ' steps.',
+    'Use the pad labels and sample names as the musical context. Respect what each sound seems to be.',
+    pads.map((pad) => '- ' + pad.padId + ' | ' + pad.label + ' | sample: ' + pad.sampleName + ' | group: ' + pad.group).join('\n'),
+    'Return active step numbers using 1-based indexing.',
+    'Favor musical patterns with space, repetition, and variation. Do not fill every lane.',
+    'Usually keep kick, snare, hats, perc, melodic, and fx roles sensible to their names.',
+  ].join('\n\n')
+
+const buildRandomSequencePlannerPrompt = (userPrompt: string, sequenceLength: number, pads: Array<{ padId: string; label: string; sampleName: string; group: string }>) =>
+  [
+    'Optional vibe hint from user: ' + userPrompt,
+    'Create a genuinely surprising but still playable step sequence for this MPC-style bank.',
+    'Sequence length: ' + sequenceLength + ' steps.',
+    'Use the pad labels and sample names as loose musical context, but do not fall back to the same stock groove every time.',
+    pads.map((pad) => '- ' + pad.padId + ' | ' + pad.label + ' | sample: ' + pad.sampleName + ' | group: ' + pad.group).join('\n'),
+    'Return active step numbers using 1-based indexing.',
+    'Prioritize novelty, asymmetry, syncopation, dropouts, and unexpected combinations that still suit the sounds.',
+    'Treat the user hint as optional inspiration rather than a strict recipe.',
+    'Leave plenty of space where appropriate. Random should feel fresh, not overcrowded.',
   ].join('\n\n')
 
 const generateElevenLabsSample = async (
@@ -215,17 +259,70 @@ export default defineConfig(({ mode }) => {
       return
     }
 
-    if (!env.ELEVENLABS_API_KEY) {
-      sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before generating real samples.' })
-      return
-    }
-
     try {
       const parsedRequest = requestSchema.parse(await readJsonBody(req))
       const generatedDir = join(process.cwd(), 'public', 'generated')
       await mkdir(generatedDir, { recursive: true })
 
+      if (parsedRequest.mode === 'sequence' || parsedRequest.mode === 'random-sequence') {
+        const sequenceLength = parsedRequest.sequenceLength
+        const sequencePads = parsedRequest.sequencePads
+        const isRandomSequence = parsedRequest.mode === 'random-sequence'
+
+        if (!sequenceLength || !sequencePads) {
+          sendJson(res, 400, { error: 'Sequence generation needs the current bank pads and sequence length.' })
+          return
+        }
+
+        const sequenceResult = await generateText({
+          model: anthropic('claude-sonnet-4-5'),
+          temperature: isRandomSequence ? 1 : 0.8,
+          toolChoice: { type: 'tool', toolName: 'submitSequencePlan' },
+          system: [
+            isRandomSequence
+              ? 'You are designing a musically useful but genuinely surprising step pattern for an MPC-inspired sampler.'
+              : 'You are designing a musically useful step pattern for an MPC-inspired sampler.',
+            isRandomSequence
+              ? 'Use the provided pad names and sample names as loose musical anchors, but avoid defaulting to the same obvious groove.'
+              : 'Use the provided pad names and sample names to infer roles and build a coherent sequence.',
+            'Return one lane for every pad, but leave many lanes empty when appropriate.',
+            isRandomSequence
+              ? 'Favor asymmetry, syncopation, surprise, and variation while keeping the result playable.'
+              : 'Favor musical patterns with space, repetition, and sensible roles.',
+            'You must call submitSequencePlan exactly once.',
+          ].join(' '),
+          prompt: isRandomSequence
+            ? buildRandomSequencePlannerPrompt(parsedRequest.prompt, sequenceLength, sequencePads)
+            : buildSequencePlannerPrompt(parsedRequest.prompt, sequenceLength, sequencePads),
+          tools: {
+            submitSequencePlan: tool({
+              description: 'Submit a step sequence plan for the current bank.',
+              inputSchema: sequencePlanSchema,
+              execute: async (input) => input,
+            }),
+          },
+        })
+
+        const toolResult = sequenceResult.toolResults.find((entry) => entry.toolName === 'submitSequencePlan')
+        if (!toolResult || toolResult.type !== 'tool-result') {
+          sendJson(res, 500, { error: 'Sequence planner did not return a valid pattern.' })
+          return
+        }
+
+        const output = sequencePlanSchema.parse(toolResult.output)
+        sendJson(res, 200, {
+          bankId: parsedRequest.bankId,
+          summary: output.summary,
+          generatedSequence: output,
+        })
+        return
+      }
+
       if (parsedRequest.mode === 'loop') {
+        if (!env.ELEVENLABS_API_KEY) {
+          sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before generating real samples.' })
+          return
+        }
         const loopResult = await generateText({
           model: anthropic('claude-sonnet-4-5'),
           temperature: 0.85,
@@ -248,7 +345,7 @@ export default defineConfig(({ mode }) => {
 
         const toolResult = loopResult.toolResults.find((entry) => entry.toolName === 'submitLoopPlan')
         if (!toolResult || toolResult.type !== 'tool-result') {
-          sendJson(res, 500, { error: 'Anthropic did not return a loop generation plan.' })
+          sendJson(res, 500, { error: 'Loop planner did not return a valid generation plan.' })
           return
         }
 
@@ -264,6 +361,10 @@ export default defineConfig(({ mode }) => {
       }
 
       if (parsedRequest.mode === 'pad') {
+        if (!env.ELEVENLABS_API_KEY) {
+          sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before generating real samples.' })
+          return
+        }
         const templatePad = allTemplatePads.find((pad) => pad.id === parsedRequest.selectedPadId)
         if (!templatePad) {
           sendJson(res, 400, { error: 'Select a pad before generating a single sample.' })
@@ -293,7 +394,7 @@ export default defineConfig(({ mode }) => {
 
         const toolResult = padResult.toolResults.find((entry) => entry.toolName === 'submitSinglePadPlan')
         if (!toolResult || toolResult.type !== 'tool-result') {
-          sendJson(res, 500, { error: 'Anthropic did not return a single-pad generation plan.' })
+          sendJson(res, 500, { error: 'Pad planner did not return a valid generation plan.' })
           return
         }
 
@@ -305,6 +406,11 @@ export default defineConfig(({ mode }) => {
           summary: output.summary,
           generatedPads: [generatedPad],
         })
+        return
+      }
+
+      if (!env.ELEVENLABS_API_KEY) {
+        sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before generating real samples.' })
         return
       }
 
@@ -331,7 +437,7 @@ export default defineConfig(({ mode }) => {
 
       const toolResult = planResult.toolResults.find((entry) => entry.toolName === 'submitKitPlan')
       if (!toolResult || toolResult.type !== 'tool-result') {
-        sendJson(res, 500, { error: 'Anthropic did not return a full-kit generation plan.' })
+        sendJson(res, 500, { error: 'Kit planner did not return a valid generation plan.' })
         return
       }
 

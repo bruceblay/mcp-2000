@@ -1,24 +1,19 @@
 - design looks horrible
-- tempo slider
-- envelope
-- export to wav
-- sequencer
+- sample envelope
+- export sequence output to wav, not sure if this will work. won't there be a sharp cutoff at the end of the sequence?
 - chromatic keyboard mode
-- sample editor?
 - recording parameter automation
-- export sample
-- loop, gate, reverse
+- midi mapping
+- loop, gate
 - edit sample type/description text
 - edit pad color(s)
 - auto chopper
 - note repeat
 - arpeggiator
-- generative pattern creation
-- mute pad or bank
+- mute pad on sequencer
 - rename session to project, have a projects select
 - isolate sounds or instruments on an input sample
 - record from microphone
 - generate new sample based off mic input
-- master volume
 - punch in record keypresses instead of step sequencing
-- 
+- metronome?

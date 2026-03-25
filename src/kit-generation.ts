@@ -69,7 +69,7 @@ export const materializeGeneratedKit = (selections: GeneratedKitSelection[]) =>
       sampleName: choice.sampleName,
       sampleUrl: '/mock-samples/' + encodeURIComponent(choice.sampleFile),
       sourceType: 'generated' as const,
-      durationLabel: 'Anthropic planned',
+      durationLabel: 'Planned sample',
       gain: choice.gain,
       label: templatePad.label,
     }

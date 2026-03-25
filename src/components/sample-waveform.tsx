@@ -11,6 +11,7 @@ export type WaveformRegion = {
 
 type SampleWaveformProps = {
   audioUrl: string | null
+  durationSeconds?: number | null
   regions?: WaveformRegion[]
   selectedRegionId?: string | null
   playheadFraction?: number | null
@@ -153,6 +154,7 @@ const loadAudioDuration = async (audioUrl: string): Promise<number> => {
 
 export function SampleWaveform({
   audioUrl,
+  durationSeconds: knownDurationSeconds = null,
   regions = [],
   selectedRegionId = null,
   playheadFraction = null,
@@ -182,6 +184,7 @@ export function SampleWaveform({
   }, [audioUrl])
 
   const displayPeaks = useMemo(() => (reversed ? [...fallbackPeaks].reverse() : fallbackPeaks), [fallbackPeaks, reversed])
+  const regionDurationSeconds = knownDurationSeconds && knownDurationSeconds > 0 ? knownDurationSeconds : durationSeconds
   const visualMarkerStartFraction = reversed ? 1 - (markerEndFraction ?? 1) : markerStartFraction ?? 0
   const visualMarkerEndFraction = reversed ? 1 - (markerStartFraction ?? 0) : markerEndFraction ?? 1
   const visualPlayheadFraction = playheadFraction === null ? null : reversed ? 1 - playheadFraction : playheadFraction
@@ -358,7 +361,7 @@ export function SampleWaveform({
 
   useEffect(() => {
     const overlay = regionsOverlayRef.current
-    if (!overlay || !regionsChangeRef.current || durationSeconds <= 0 || regions.length === 0) {
+    if (!overlay || !regionsChangeRef.current || regionDurationSeconds <= 0 || regions.length === 0) {
       return
     }
 
@@ -366,7 +369,7 @@ export function SampleWaveform({
       const updateFromPointer = (clientX: number) => {
         const bounds = overlay.getBoundingClientRect()
         const relative = Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width))
-        const nextTime = relative * durationSeconds
+        const nextTime = relative * regionDurationSeconds
         const index = regions.findIndex((region) => region.id === regionId)
         if (index < 0) {
           return
@@ -385,7 +388,7 @@ export function SampleWaveform({
           }
         } else {
           const minEnd = target.start + 0.01
-          const maxEnd = index === nextRegions.length - 1 ? durationSeconds : nextRegions[index + 1].end - 0.01
+          const maxEnd = index === nextRegions.length - 1 ? regionDurationSeconds : nextRegions[index + 1].end - 0.01
           const end = Math.min(Math.max(nextTime, minEnd), maxEnd)
           target.end = end
           if (index < nextRegions.length - 1) {
@@ -440,7 +443,7 @@ export function SampleWaveform({
     return () => {
       listeners.forEach((dispose) => dispose())
     }
-  }, [durationSeconds, regions])
+  }, [regionDurationSeconds, regions])
 
   const hasTrimMarkers = markerStartFraction !== null && markerEndFraction !== null && onMarkerChange
 
@@ -466,8 +469,8 @@ export function SampleWaveform({
       {regions.length > 0 ? (
         <div ref={regionsOverlayRef} className="sample-waveform__regions" aria-hidden="true">
           {regions.map((region) => {
-            const left = durationSeconds > 0 ? (region.start / durationSeconds) * 100 : 0
-            const width = durationSeconds > 0 ? ((region.end - region.start) / durationSeconds) * 100 : 0
+            const left = regionDurationSeconds > 0 ? (region.start / regionDurationSeconds) * 100 : 0
+            const width = regionDurationSeconds > 0 ? ((region.end - region.start) / regionDurationSeconds) * 100 : 0
             return (
               <button
                 key={region.id}
