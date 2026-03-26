@@ -1,19 +1,22 @@
-- design looks horrible
-- sample envelope
-- export sequence output to wav, not sure if this will work. won't there be a sharp cutoff at the end of the sequence?
-- chromatic keyboard mode
-- recording parameter automation
-- midi mapping
-- loop, gate
-- edit sample type/description text
-- edit pad color(s)
-- auto chopper
-- note repeat
-- arpeggiator
-- mute pad on sequencer
-- rename session to project, have a projects select
-- isolate sounds or instruments on an input sample
-- record from microphone
-- generate new sample based off mic input
-- punch in record keypresses instead of step sequencing
-- metronome?
+- export sequence output to wav, not sure if this will work. won't there be a sharp cutoff at the end of the sequence? (6)
+- punch in record keypresses instead of step sequencing (5)
+- chromatic keyboard mode (5)
+- note repeat (4)
+- edit sample type/description text (2)
+- edit pad color(s) (2)
+- variable chopping of loop samples (5)
+- midi mapping (6)
+- rename session to project, have a projects select (4)
+- arpeggiator (5)
+- generate new sample based off mic input (5)
+- isolate sounds or instruments on an input sample (9)
+- recorded logs of what other people are prompting (4)
+- analytics (5)
+- fx sequencer?
+- sample envelope (4)
+- drag/drop sound file onto sample editor to display it on loop edit view
+- do code quality check. look for reusable components
+- dark mode?
+- sequencer stops playing when new sequence is generated or sequence lenght is changed
+
+- design looks horrible (7)

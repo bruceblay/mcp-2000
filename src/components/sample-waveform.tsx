@@ -22,7 +22,9 @@ type SampleWaveformProps = {
   onRegionSelect?: (region: WaveformRegion) => void
   onRegionsChange?: (regions: WaveformRegion[]) => void
   onMarkerChange?: (field: MarkerDragField, nextFraction: number) => void
-  onWaveformClick?: () => void
+  onWaveformPointerDown?: () => void
+  onWaveformPointerUp?: () => void
+  onWaveformPointerLeave?: () => void
 }
 
 type DecodedWaveform = {
@@ -165,7 +167,9 @@ export function SampleWaveform({
   onRegionSelect,
   onRegionsChange,
   onMarkerChange,
-  onWaveformClick,
+  onWaveformPointerDown,
+  onWaveformPointerUp,
+  onWaveformPointerLeave,
 }: SampleWaveformProps) {
   const [fallbackPeaks, setFallbackPeaks] = useState<number[]>([])
   const [durationSeconds, setDurationSeconds] = useState<number>(0)
@@ -448,18 +452,36 @@ export function SampleWaveform({
   const hasTrimMarkers = markerStartFraction !== null && markerEndFraction !== null && onMarkerChange
 
   const handleWaveformPointerDown = () => {
-    if (regions.length > 0 || !onWaveformClick) {
+    if (regions.length > 0 || !onWaveformPointerDown) {
       return
     }
 
-    onWaveformClick()
+    onWaveformPointerDown()
+  }
+
+  const handleWaveformPointerUp = () => {
+    if (regions.length > 0 || !onWaveformPointerUp) {
+      return
+    }
+
+    onWaveformPointerUp()
+  }
+
+  const handleWaveformPointerLeave = () => {
+    if (regions.length > 0 || !onWaveformPointerLeave) {
+      return
+    }
+
+    onWaveformPointerLeave()
   }
 
   return (
     <div
-      className={onWaveformClick && regions.length === 0 ? 'sample-waveform is-auditionable' : 'sample-waveform'}
+      className={onWaveformPointerDown && regions.length === 0 ? 'sample-waveform is-auditionable' : 'sample-waveform'}
       aria-label="Sample editor waveform"
       onPointerDown={handleWaveformPointerDown}
+      onPointerUp={handleWaveformPointerUp}
+      onPointerLeave={handleWaveformPointerLeave}
     >
       <canvas
         ref={fallbackCanvasRef}

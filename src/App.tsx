@@ -33,9 +33,19 @@ type EngineStatus = 'idle' | 'loading' | 'ready' | 'error'
 type GenerationStatus = 'idle' | 'generating' | 'error'
 type GenerationMode = 'kit' | 'pad' | 'loop'
 type SequenceGenerationAction = 'generate' | 'randomize'
+type MicCaptureState = 'idle' | 'requesting' | 'recording' | 'processing' | 'ready' | 'error'
 type WorkView = 'editor' | 'sequence' | 'mixer' | 'effects'
 type EditorSource = 'pad' | 'loop'
 type PlaybackMode = 'one-shot' | 'loop' | 'gate' | 'gate-loop'
+
+type RecordedTake = {
+  blob: Blob
+  previewUrl: string
+  sampleName: string
+  sampleFile: string
+  durationSeconds: number
+  createdAt: number
+}
 
 type GeneratedLoop = {
   sampleName: string
@@ -45,6 +55,16 @@ type GeneratedLoop = {
   durationSeconds?: number
   bpm: number
   sourceType: PadSourceType
+}
+
+type EditorTransformResponse = {
+  summary?: string
+  transformedSample: {
+    sampleName: string
+    sampleFile: string
+    sampleUrl: string
+    sourceType: PadSourceType
+  }
 }
 
 type ChopRegion = WaveformRegion
@@ -80,6 +100,7 @@ type BankState = {
   playbackSettings: Record<string, PadPlaybackSetting>
   sequenceLength: number
   stepPattern: Record<string, boolean[]>
+  sequenceMuted: Record<string, boolean>
 }
 
 const createInitialBankMixerGains = () =>
@@ -107,6 +128,9 @@ const getEffectiveBankGain = (
 const createInitialStepPattern = (pads: Pad[], stepCount = 16) =>
   Object.fromEntries(pads.map((pad) => [pad.id, Array.from({ length: stepCount }, () => false)])) as Record<string, boolean[]>
 
+const createInitialSequenceMutedState = (pads: Pad[]) =>
+  Object.fromEntries(pads.map((pad) => [pad.id, false])) as Record<string, boolean>
+
 const createInitialPlaybackSettings = (pads: Pad[]) =>
   Object.fromEntries(
     pads.map((pad) => [pad.id, { startFraction: 0, endFraction: 1, semitoneOffset: 0, gain: pad.gain, pan: 0, playbackMode: 'one-shot', reversed: false }]),
@@ -118,6 +142,7 @@ const createInitialBankState = (bankId: BankKitId): BankState => ({
   playbackSettings: createInitialPlaybackSettings(starterBankPads[bankId]),
   sequenceLength: 16,
   stepPattern: createInitialStepPattern(starterBankPads[bankId]),
+  sequenceMuted: createInitialSequenceMutedState(starterBankPads[bankId]),
 })
 
 const createInitialBanksState = () =>
@@ -382,6 +407,87 @@ const triggerBlobDownload = (blob: Blob, fileName: string) => {
   window.setTimeout(() => URL.revokeObjectURL(exportUrl), 0)
 }
 
+const preferredRecordingMimeTypes = [
+  'audio/webm;codecs=opus',
+  'audio/webm',
+  'audio/mp4',
+  'audio/ogg;codecs=opus',
+] as const
+
+const getPreferredRecordingMimeType = () => {
+  if (typeof MediaRecorder === 'undefined') {
+    return ''
+  }
+
+  return preferredRecordingMimeTypes.find((mimeType) => (
+    typeof MediaRecorder.isTypeSupported === 'function' ? MediaRecorder.isTypeSupported(mimeType) : true
+  )) ?? ''
+}
+
+const getRecordingFileExtension = (mimeType: string) => {
+  if (mimeType.includes('ogg')) {
+    return 'ogg'
+  }
+
+  if (mimeType.includes('mp4')) {
+    return 'm4a'
+  }
+
+  return 'webm'
+}
+
+const loadAudioDurationFromUrl = async (audioUrl: string) =>
+  new Promise<number>((resolve) => {
+    const audio = new Audio()
+
+    const cleanup = () => {
+      audio.removeEventListener('loadedmetadata', handleLoadedMetadata)
+      audio.removeEventListener('error', handleError)
+    }
+
+    const handleLoadedMetadata = () => {
+      cleanup()
+      resolve(Number.isFinite(audio.duration) ? audio.duration : 0)
+    }
+
+    const handleError = () => {
+      cleanup()
+      resolve(0)
+    }
+
+    audio.preload = 'metadata'
+    audio.src = audioUrl
+    audio.addEventListener('loadedmetadata', handleLoadedMetadata)
+    audio.addEventListener('error', handleError)
+  })
+
+const formatClockDuration = (seconds: number) => {
+  const wholeSeconds = Math.max(0, Math.round(seconds))
+  const minutes = Math.floor(wholeSeconds / 60)
+  const remainder = wholeSeconds % 60
+  return `${minutes}:${String(remainder).padStart(2, '0')}`
+}
+
+const blobToBase64 = async (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onloadend = () => {
+      if (typeof reader.result !== 'string') {
+        reject(new Error('Failed to encode audio for ElevenLabs.'))
+        return
+      }
+
+      resolve(reader.result.split(',')[1] ?? '')
+    }
+
+    reader.onerror = () => {
+      reject(new Error('Failed to encode audio for ElevenLabs.'))
+    }
+
+    reader.readAsDataURL(blob)
+  })
+
 const normalizeChopRegions = (regions: ChopRegion[], durationSeconds: number): ChopRegion[] => {
   if (regions.length === 0) {
     return []
@@ -423,6 +529,10 @@ function App() {
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle')
   const [generationMode, setGenerationMode] = useState<GenerationMode>('kit')
   const [generationMessage, setGenerationMessage] = useState('Generate a full 16-pad bank, a single pad, or a loop for chopping.')
+  const [micCaptureState, setMicCaptureState] = useState<MicCaptureState>('idle')
+  const [micCaptureMessage, setMicCaptureMessage] = useState('Capture a raw take from your microphone, then load it into a pad or the editor.')
+  const [recordedTake, setRecordedTake] = useState<RecordedTake | null>(null)
+  const [recordingElapsedMs, setRecordingElapsedMs] = useState(0)
   const [sequencePromptText, setSequencePromptText] = useState('Boom bap pattern with swung hats, snare on the backbeat, and sparse percussion fills')
   const [sequenceGenerationStatus, setSequenceGenerationStatus] = useState<GenerationStatus>('idle')
   const [sequenceGenerationAction, setSequenceGenerationAction] = useState<SequenceGenerationAction | null>(null)
@@ -434,8 +544,11 @@ function App() {
   const [loopChopRegions, setLoopChopRegions] = useState<ChopRegion[]>([])
   const [selectedChopId, setSelectedChopId] = useState<string | null>(null)
   const [editorPlayheadFraction, setEditorPlayheadFraction] = useState<number | null>(null)
+  const [editorTransformPrompt, setEditorTransformPrompt] = useState('')
   const [isExportingSample, setIsExportingSample] = useState(false)
+  const [isTransformingEditorAudio, setIsTransformingEditorAudio] = useState(false)
   const [isLoopPlaying, setIsLoopPlaying] = useState(false)
+  const [isNormalizingLoop, setIsNormalizingLoop] = useState(false)
   const [loopDecodeStatus, setLoopDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [selectedPadDecodeStatus, setSelectedPadDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [sequenceTempo, setSequenceTempo] = useState(94)
@@ -460,6 +573,15 @@ function App() {
   const loopAudioRef = useRef<HTMLAudioElement | null>(null)
   const loopStopTimeoutRef = useRef<number | null>(null)
   const playheadFrameRef = useRef<number | null>(null)
+  const activePadPlayheadIdRef = useRef<string | null>(null)
+  const preservedLoopChopRegionsRef = useRef<ChopRegion[] | null>(null)
+  const preservedSelectedChopIdRef = useRef<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const micStreamRef = useRef<MediaStream | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const recordingTimerRef = useRef<number | null>(null)
+  const recordingStartedAtRef = useRef<number | null>(null)
+  const ephemeralAudioUrlsRef = useRef<Set<string>>(new Set())
   const scheduledMetronomeSourcesRef = useRef<Set<OscillatorNode>>(new Set())
   const sequenceSchedulerRef = useRef<number | null>(null)
   const sequenceNextStepTimeRef = useRef(0)
@@ -476,6 +598,7 @@ function App() {
   const currentBankPads = currentBankState.pads
   const currentSequenceLength = currentBankState.sequenceLength
   const currentStepPattern = currentBankState.stepPattern
+  const currentSequenceMuted = currentBankState.sequenceMuted
   const selectedPad = useMemo(
     () => currentBankPads.find((pad) => pad.id === currentBankState.selectedPadId) ?? currentBankPads[0],
     [currentBankPads, currentBankState.selectedPadId],
@@ -489,6 +612,7 @@ function App() {
   const isPadReversed = selectedPadSettings.reversed
   const currentEditorAudioUrl = editorSource === 'loop' && generatedLoop ? generatedLoop.sampleUrl : selectedPad.sampleUrl
   const currentEditorAudioDuration = editorSource === 'loop' && generatedLoop ? getLoopDurationSeconds(generatedLoop) : null
+  const currentEditorSampleName = editorSource === 'loop' && generatedLoop ? generatedLoop.sampleName : selectedPad.sampleName
   const activeWaveformStatus = editorSource === 'loop' && generatedLoop ? loopDecodeStatus : selectedPadDecodeStatus
   const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
   const editorExportLabel = isLoopEditorActive ? 'Export Loop' : 'Export Sample'
@@ -496,10 +620,57 @@ function App() {
   const effectsList = useMemo(() => getEffectsList(), [])
   const currentEffectConfig = getEffectConfig(selectedEffectId)
   const isCurrentEffectSupported = supportedGlobalEffectIds.has(selectedEffectId)
+  const micRecordingSupported = typeof MediaRecorder !== 'undefined' && typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
+  const micCaptureClockLabel = micCaptureState === 'recording'
+    ? formatClockDuration(recordingElapsedMs / 1000)
+    : recordedTake
+      ? formatClockDuration(recordedTake.durationSeconds)
+      : '0:00'
+
+  const createEphemeralAudioUrl = (blob: Blob) => {
+    const nextUrl = URL.createObjectURL(blob)
+    ephemeralAudioUrlsRef.current.add(nextUrl)
+    return nextUrl
+  }
+
+  const stopMicStream = () => {
+    if (!micStreamRef.current) {
+      return
+    }
+
+    micStreamRef.current.getTracks().forEach((track) => track.stop())
+    micStreamRef.current = null
+  }
+
+  const clearRecordingTimer = () => {
+    if (recordingTimerRef.current) {
+      window.clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
+  }
 
   useEffect(() => {
     bankStatesRef.current = bankStates
   }, [bankStates])
+
+  useEffect(() => {
+    const referencedUrls = new Set(allPads.map((pad) => pad.sampleUrl))
+
+    if (generatedLoop?.sampleUrl) {
+      referencedUrls.add(generatedLoop.sampleUrl)
+    }
+
+    if (recordedTake?.previewUrl) {
+      referencedUrls.add(recordedTake.previewUrl)
+    }
+
+    for (const url of Array.from(ephemeralAudioUrlsRef.current)) {
+      if (!referencedUrls.has(url)) {
+        URL.revokeObjectURL(url)
+        ephemeralAudioUrlsRef.current.delete(url)
+      }
+    }
+  }, [allPads, generatedLoop?.sampleUrl, recordedTake?.previewUrl])
 
   useEffect(() => {
     for (const bankId of bankIds) {
@@ -550,12 +721,31 @@ function App() {
         window.cancelAnimationFrame(playheadFrameRef.current)
       }
 
+      clearRecordingTimer()
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.ondataavailable = null
+        mediaRecorderRef.current.onstop = null
+        mediaRecorderRef.current.onerror = null
+
+        if (mediaRecorderRef.current.state !== 'inactive') {
+          try {
+            mediaRecorderRef.current.stop()
+          } catch {}
+        }
+      }
+      stopMicStream()
+
       for (const source of scheduledMetronomeSourcesRef.current) {
         try {
           source.stop()
         } catch {}
       }
       scheduledMetronomeSourcesRef.current.clear()
+
+      for (const url of ephemeralAudioUrlsRef.current) {
+        URL.revokeObjectURL(url)
+      }
+      ephemeralAudioUrlsRef.current.clear()
 
       for (const activePad of activePadSourcesRef.current.values()) {
         try {
@@ -583,12 +773,27 @@ function App() {
 
   useEffect(() => {
     if (!generatedLoop) {
+      preservedLoopChopRegionsRef.current = null
+      preservedSelectedChopIdRef.current = null
       setLoopChopRegions([])
       setSelectedChopId(null)
       return
     }
 
-    const nextRegions = buildChopRegions(getLoopDurationSeconds(generatedLoop), loopChopCount)
+    const loopDuration = getLoopDurationSeconds(generatedLoop)
+    const preservedRegions = preservedLoopChopRegionsRef.current
+    const preservedSelectedChopId = preservedSelectedChopIdRef.current
+
+    if (preservedRegions?.length) {
+      const normalizedRegions = normalizeChopRegions(preservedRegions, loopDuration)
+      preservedLoopChopRegionsRef.current = null
+      preservedSelectedChopIdRef.current = null
+      setLoopChopRegions(normalizedRegions)
+      setSelectedChopId(normalizedRegions.find((region) => region.id === preservedSelectedChopId)?.id ?? normalizedRegions[0]?.id ?? null)
+      return
+    }
+
+    const nextRegions = buildChopRegions(loopDuration, loopChopCount)
     setLoopChopRegions(nextRegions)
     setSelectedChopId(nextRegions[0]?.id ?? null)
   }, [generatedLoop?.sampleUrl, generatedLoop?.durationSeconds, generatedLoop?.durationLabel])
@@ -663,6 +868,54 @@ function App() {
 
     if (typeof nextValues.pan === 'number' && activePad.pannerNode) {
       smoothEffectParam(activePad.pannerNode.pan, nextValues.pan, 0.02, 'linear')
+    }
+  }
+
+  const syncActivePadLoopWindow = (padId: string, nextSettings: PadPlaybackSetting) => {
+    const activePad = activePadSourcesRef.current.get(padId)
+    const activeBuffer = activePad?.source.buffer
+
+    if (!activePad || !activeBuffer || !activePad.source.loop) {
+      return
+    }
+
+    const forwardStartTime = activeBuffer.duration * nextSettings.startFraction
+    const forwardEndTime = activeBuffer.duration * nextSettings.endFraction
+    const startTime = nextSettings.reversed ? activeBuffer.duration - forwardEndTime : forwardStartTime
+    const endTime = nextSettings.reversed ? activeBuffer.duration - forwardStartTime : forwardEndTime
+    const playbackDuration = Math.max(0.01, endTime - startTime)
+
+    activePad.source.loopStart = startTime
+    activePad.source.loopEnd = endTime
+
+    startPlayheadAnimation(
+      padId,
+      nextSettings.reversed ? nextSettings.endFraction : nextSettings.startFraction,
+      nextSettings.reversed ? nextSettings.startFraction : nextSettings.endFraction,
+      (playbackDuration / activePad.source.playbackRate.value) * 1000,
+      { loop: true },
+    )
+  }
+
+  const syncActivePadPitch = (padId: string, nextSettings: PadPlaybackSetting) => {
+    const activePad = activePadSourcesRef.current.get(padId)
+    const activeBuffer = activePad?.source.buffer
+
+    if (!activePad || !activeBuffer) {
+      return
+    }
+
+    const nextPlaybackRate = Math.pow(2, nextSettings.semitoneOffset / 12)
+    smoothEffectParam(activePad.source.playbackRate, nextPlaybackRate, 0.02, 'exponential')
+
+    if (activePad.source.loop) {
+      startPlayheadAnimation(
+        padId,
+        nextSettings.reversed ? nextSettings.endFraction : nextSettings.startFraction,
+        nextSettings.reversed ? nextSettings.startFraction : nextSettings.endFraction,
+        ((Math.max(0.01, Math.abs(nextSettings.endFraction - nextSettings.startFraction)) * activeBuffer.duration) / nextPlaybackRate) * 1000,
+        { loop: true },
+      )
     }
   }
 
@@ -1608,65 +1861,365 @@ function App() {
     return reversedBuffer
   }
 
+  const renderCurrentEditorAudioAsset = async () => {
+    if (editorSource === 'loop' && generatedLoop) {
+      const response = await fetch(generatedLoop.sampleUrl)
+      if (!response.ok) {
+        throw new Error('Loop export failed.')
+      }
+
+      return {
+        blob: await response.blob(),
+        fileName: generatedLoop.sampleFile,
+        durationSeconds: getLoopDurationSeconds(generatedLoop),
+      }
+    }
+
+    await ensureAudioEngine()
+
+    const sampleBuffer = await getPlaybackBuffer(selectedPad, selectedPadSettings.reversed)
+    const forwardStartTime = sampleBuffer.duration * selectedPadSettings.startFraction
+    const forwardEndTime = sampleBuffer.duration * selectedPadSettings.endFraction
+    const startTime = selectedPadSettings.reversed ? sampleBuffer.duration - forwardEndTime : forwardStartTime
+    const endTime = selectedPadSettings.reversed ? sampleBuffer.duration - forwardStartTime : forwardEndTime
+    const playbackDuration = Math.max(0.01, endTime - startTime)
+    const playbackRate = Math.pow(2, selectedPadSettings.semitoneOffset / 12)
+    const renderedDurationSeconds = Math.max(0.01, playbackDuration / playbackRate)
+    const outputChannels = Math.min(2, Math.max(sampleBuffer.numberOfChannels, Math.abs(selectedPadSettings.pan) > 0.001 ? 2 : 1))
+    const frameCount = Math.max(1, Math.ceil(renderedDurationSeconds * sampleBuffer.sampleRate) + Math.ceil(sampleBuffer.sampleRate * 0.02))
+    const offlineContext = new OfflineAudioContext(outputChannels, frameCount, sampleBuffer.sampleRate)
+    const source = offlineContext.createBufferSource()
+    const gainNode = offlineContext.createGain()
+    const pannerNode = typeof offlineContext.createStereoPanner === 'function' ? offlineContext.createStereoPanner() : null
+
+    source.buffer = sampleBuffer
+    source.playbackRate.value = playbackRate
+    gainNode.gain.value = selectedPadSettings.gain
+
+    source.connect(gainNode)
+
+    if (pannerNode) {
+      pannerNode.pan.value = selectedPadSettings.pan
+      gainNode.connect(pannerNode)
+      pannerNode.connect(offlineContext.destination)
+    } else {
+      gainNode.connect(offlineContext.destination)
+    }
+
+    source.start(0, startTime, playbackDuration)
+
+    const renderedBuffer = await offlineContext.startRendering()
+    return {
+      blob: encodeWavBlob(renderedBuffer),
+      fileName: [
+        'bank-' + currentBankId.toLowerCase(),
+        sanitizeDownloadName(selectedPad.label),
+        sanitizeDownloadName(selectedPad.sampleName),
+      ].join('-') + '.wav',
+      durationSeconds: renderedBuffer.duration,
+    }
+  }
+
   const exportCurrentEditorAudio = async () => {
     setIsExportingSample(true)
 
     try {
-      if (editorSource === 'loop' && generatedLoop) {
-        const response = await fetch(generatedLoop.sampleUrl)
-        if (!response.ok) {
-          throw new Error('Loop export failed.')
-        }
-
-        const loopBlob = await response.blob()
-        triggerBlobDownload(loopBlob, generatedLoop.sampleFile)
-        return
-      }
-
-      await ensureAudioEngine()
-
-      const sampleBuffer = await getPlaybackBuffer(selectedPad, selectedPadSettings.reversed)
-      const forwardStartTime = sampleBuffer.duration * selectedPadSettings.startFraction
-      const forwardEndTime = sampleBuffer.duration * selectedPadSettings.endFraction
-      const startTime = selectedPadSettings.reversed ? sampleBuffer.duration - forwardEndTime : forwardStartTime
-      const endTime = selectedPadSettings.reversed ? sampleBuffer.duration - forwardStartTime : forwardEndTime
-      const playbackDuration = Math.max(0.01, endTime - startTime)
-      const playbackRate = Math.pow(2, selectedPadSettings.semitoneOffset / 12)
-      const renderedDurationSeconds = Math.max(0.01, playbackDuration / playbackRate)
-      const outputChannels = Math.min(2, Math.max(sampleBuffer.numberOfChannels, Math.abs(selectedPadSettings.pan) > 0.001 ? 2 : 1))
-      const frameCount = Math.max(1, Math.ceil(renderedDurationSeconds * sampleBuffer.sampleRate) + Math.ceil(sampleBuffer.sampleRate * 0.02))
-      const offlineContext = new OfflineAudioContext(outputChannels, frameCount, sampleBuffer.sampleRate)
-      const source = offlineContext.createBufferSource()
-      const gainNode = offlineContext.createGain()
-      const pannerNode = typeof offlineContext.createStereoPanner === 'function' ? offlineContext.createStereoPanner() : null
-
-      source.buffer = sampleBuffer
-      source.playbackRate.value = playbackRate
-      gainNode.gain.value = selectedPadSettings.gain
-
-      source.connect(gainNode)
-
-      if (pannerNode) {
-        pannerNode.pan.value = selectedPadSettings.pan
-        gainNode.connect(pannerNode)
-        pannerNode.connect(offlineContext.destination)
-      } else {
-        gainNode.connect(offlineContext.destination)
-      }
-
-      source.start(0, startTime, playbackDuration)
-
-      const renderedBuffer = await offlineContext.startRendering()
-      triggerBlobDownload(encodeWavBlob(renderedBuffer), [
-        'bank-' + currentBankId.toLowerCase(),
-        sanitizeDownloadName(selectedPad.label),
-        sanitizeDownloadName(selectedPad.sampleName),
-      ].join('-') + '.wav')
+      const renderedAsset = await renderCurrentEditorAudioAsset()
+      triggerBlobDownload(renderedAsset.blob, renderedAsset.fileName)
     } catch (error) {
       console.error('Editor export failed.', error)
     } finally {
       setIsExportingSample(false)
     }
+  }
+
+  const transformCurrentEditorAudio = async () => {
+    const nextPrompt = editorTransformPrompt.trim()
+
+    if (!currentEditorAudioUrl || !nextPrompt) {
+      return
+    }
+
+    if (nextPrompt.length < 20) {
+      setGenerationMessage('Give ElevenLabs a more descriptive transform prompt with at least 20 characters.')
+      return
+    }
+
+    try {
+      setIsTransformingEditorAudio(true)
+
+      const renderedAsset = await renderCurrentEditorAudioAsset()
+      const audioBase64 = await blobToBase64(renderedAsset.blob)
+      const response = await fetch('/api/transform-sample', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: nextPrompt,
+          sampleName: currentEditorSampleName,
+          sampleFile: renderedAsset.fileName,
+          editorSource,
+          audioBase64,
+          mimeType: renderedAsset.blob.type || 'audio/wav',
+        }),
+      })
+
+      const payload = (await response.json()) as {
+        error?: string
+        summary?: string
+        transformedSample?: EditorTransformResponse['transformedSample']
+      }
+
+      if (!response.ok || !payload.transformedSample) {
+        throw new Error(payload.error || 'ElevenLabs transformation failed.')
+      }
+
+      const transformedSample = payload.transformedSample
+
+      if (editorSource === 'loop' && generatedLoop) {
+        const durationSeconds = Math.max(0.01, await loadAudioDurationFromUrl(transformedSample.sampleUrl))
+        preservedLoopChopRegionsRef.current = loopChopRegions
+        preservedSelectedChopIdRef.current = selectedChopId
+
+        stopLoopPlayback()
+        setGeneratedLoop({
+          sampleName: transformedSample.sampleName,
+          sampleFile: transformedSample.sampleFile,
+          sampleUrl: transformedSample.sampleUrl,
+          durationLabel: `${durationSeconds.toFixed(2)}s transformed`,
+          durationSeconds,
+          bpm: generatedLoop.bpm,
+          sourceType: transformedSample.sourceType,
+        })
+      } else {
+        stopAllPadSources()
+        setActivePadIds([])
+        setEditorPlayheadFraction(null)
+
+        updateCurrentBank((bank) => ({
+          ...bank,
+          pads: bank.pads.map((pad) => (
+            pad.id === selectedPad.id
+              ? {
+                  ...pad,
+                  sampleName: transformedSample.sampleName,
+                  sampleFile: transformedSample.sampleFile,
+                  sampleUrl: transformedSample.sampleUrl,
+                  sourceType: transformedSample.sourceType,
+                  durationLabel: 'ElevenLabs transformed',
+                }
+              : pad
+          )),
+          playbackSettings: {
+            ...bank.playbackSettings,
+            [selectedPad.id]: {
+              ...bank.playbackSettings[selectedPad.id],
+              startFraction: 0,
+              endFraction: 1,
+              reversed: false,
+            },
+          },
+        }))
+      }
+
+      setEditorTransformPrompt('')
+      setGenerationMessage(payload.summary || `Loaded a transformed version of ${currentEditorSampleName} into the editor.`)
+    } catch (error) {
+      console.error('Editor transform failed.', error)
+      setGenerationMessage(error instanceof Error ? error.message : 'Editor transform failed.')
+    } finally {
+      setIsTransformingEditorAudio(false)
+    }
+  }
+
+  const startMicRecording = async () => {
+    if (!micRecordingSupported || micCaptureState === 'recording' || micCaptureState === 'requesting' || micCaptureState === 'processing') {
+      return
+    }
+
+    let stream: MediaStream | null = null
+
+    try {
+      setMicCaptureState('requesting')
+      setMicCaptureMessage('Requesting microphone access from the browser.')
+
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const preferredMimeType = getPreferredRecordingMimeType()
+      const recorder = preferredMimeType ? new MediaRecorder(stream, { mimeType: preferredMimeType }) : new MediaRecorder(stream)
+
+      stopMicStream()
+      micStreamRef.current = stream
+      mediaRecorderRef.current = recorder
+      recordedChunksRef.current = []
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          recordedChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onstop = () => {
+        const capturedChunks = recordedChunksRef.current.slice()
+        const captureMimeType = recorder.mimeType || recordedChunksRef.current[0]?.type || 'audio/webm'
+
+        recordedChunksRef.current = []
+        mediaRecorderRef.current = null
+        clearRecordingTimer()
+        recordingStartedAtRef.current = null
+        stopMicStream()
+
+        if (capturedChunks.length === 0) {
+          setMicCaptureState('error')
+          setMicCaptureMessage('No audio was captured. Try another take.')
+          return
+        }
+
+        void (async () => {
+          const blob = new Blob(capturedChunks, { type: captureMimeType })
+          const previewUrl = createEphemeralAudioUrl(blob)
+          const durationSeconds = Math.max(0.01, await loadAudioDurationFromUrl(previewUrl))
+          const createdAt = Date.now()
+          const sampleFile = `${createdAt}-mic-take.${getRecordingFileExtension(captureMimeType)}`
+          const sampleName = `Mic Take ${new Date(createdAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`
+
+          setRecordedTake({
+            blob,
+            previewUrl,
+            sampleName,
+            sampleFile,
+            durationSeconds,
+            createdAt,
+          })
+          setMicCaptureState('ready')
+          setMicCaptureMessage('Captured a raw take. Assign it to the selected pad or open it in the editor for chopping.')
+          setRecordingElapsedMs(0)
+        })()
+      }
+
+      recorder.onerror = () => {
+        clearRecordingTimer()
+        recordingStartedAtRef.current = null
+        mediaRecorderRef.current = null
+        stopMicStream()
+        setMicCaptureState('error')
+        setMicCaptureMessage('Recording failed. Try another take.')
+      }
+
+      recorder.start()
+      recordingStartedAtRef.current = performance.now()
+      setRecordingElapsedMs(0)
+      clearRecordingTimer()
+      recordingTimerRef.current = window.setInterval(() => {
+        if (recordingStartedAtRef.current !== null) {
+          setRecordingElapsedMs(performance.now() - recordingStartedAtRef.current)
+        }
+      }, 120)
+      setMicCaptureState('recording')
+      setMicCaptureMessage('Recording from the default microphone. Stop when the take feels right.')
+    } catch (error) {
+      clearRecordingTimer()
+      recordingStartedAtRef.current = null
+      mediaRecorderRef.current = null
+      stream?.getTracks().forEach((track) => track.stop())
+      stopMicStream()
+      setMicCaptureState('error')
+      setMicCaptureMessage(
+        error instanceof Error && /denied|permission/i.test(error.message)
+          ? 'Microphone access was denied. Allow it in the browser and try again.'
+          : 'Microphone capture failed. Check your browser permissions and input device.',
+      )
+    }
+  }
+
+  const stopMicRecording = () => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder || recorder.state === 'inactive') {
+      return
+    }
+
+    setMicCaptureState('processing')
+    setMicCaptureMessage('Finalizing the take...')
+    recorder.stop()
+  }
+
+  const clearRecordedTake = () => {
+    if (micCaptureState === 'recording' || micCaptureState === 'processing') {
+      return
+    }
+
+    setRecordedTake(null)
+    setMicCaptureState('idle')
+    setMicCaptureMessage('Capture a raw take from your microphone, then load it into a pad or the editor.')
+  }
+
+  const assignRecordedTakeToSelectedPad = () => {
+    if (!recordedTake) {
+      return
+    }
+
+    const assignedUrl = createEphemeralAudioUrl(recordedTake.blob)
+
+    stopAllPadSources()
+    setActivePadIds([])
+    setEditorPlayheadFraction(null)
+
+    updateCurrentBank((bank) => ({
+      ...bank,
+      pads: bank.pads.map((pad) => (
+        pad.id === selectedPad.id
+          ? {
+              ...pad,
+              sampleName: recordedTake.sampleName,
+              sampleFile: recordedTake.sampleFile,
+              sampleUrl: assignedUrl,
+              sourceType: 'uploaded',
+              durationLabel: `${recordedTake.durationSeconds.toFixed(2)}s recorded`,
+              gain: 1,
+            }
+          : pad
+      )),
+      playbackSettings: {
+        ...bank.playbackSettings,
+        [selectedPad.id]: {
+          startFraction: 0,
+          endFraction: 1,
+          semitoneOffset: 0,
+          gain: 1,
+          pan: 0,
+          playbackMode: 'one-shot',
+          reversed: false,
+        },
+      },
+      selectedPadId: selectedPad.id,
+    }))
+
+    setWorkView('editor')
+    setEditorSource('pad')
+    setMicCaptureMessage(`Loaded the take into ${selectedPad.label}. You can trim or play it from the pad now.`)
+  }
+
+  const openRecordedTakeInEditor = () => {
+    if (!recordedTake) {
+      return
+    }
+
+    const loopUrl = createEphemeralAudioUrl(recordedTake.blob)
+
+    stopLoopPlayback()
+    setGeneratedLoop({
+      sampleName: recordedTake.sampleName,
+      sampleFile: recordedTake.sampleFile,
+      sampleUrl: loopUrl,
+      durationLabel: `${recordedTake.durationSeconds.toFixed(2)}s recorded`,
+      durationSeconds: recordedTake.durationSeconds,
+      bpm: sequenceTempo,
+      sourceType: 'uploaded',
+    })
+    setWorkView('editor')
+    setEditorSource('loop')
+    setIsLoopPlaying(false)
+    setMicCaptureMessage('Loaded the take into the editor. You can audition and chop it from there.')
   }
 
   const clearMetronomeSources = () => {
@@ -1755,10 +2308,10 @@ function App() {
     const playbackDuration = Math.max(0.01, endTime - startTime)
 
     const playbackMode = fromSequence ? 'one-shot' : playbackSettings.playbackMode ?? 'one-shot'
+    const isLoopingMode = playbackMode === 'loop' || playbackMode === 'gate-loop'
 
     if (!fromSequence && playbackMode === 'loop' && activePadSourcesRef.current.has(padId)) {
       stopPadSource(padId)
-      setEditorPlayheadFraction(null)
       return
     }
 
@@ -1772,7 +2325,7 @@ function App() {
 
     source.buffer = sampleBuffer
     source.playbackRate.value = Math.pow(2, playbackSettings.semitoneOffset / 12)
-    source.loop = playbackMode === 'loop' || playbackMode === 'gate-loop'
+    source.loop = isLoopingMode
     gainNode.gain.value = playbackSettings.gain
     if (pannerNode) {
       pannerNode.pan.value = playbackSettings.pan
@@ -1788,7 +2341,7 @@ function App() {
       gainNode.connect(bankGainNode)
     }
 
-    if (playbackMode === 'loop' || playbackMode === 'gate-loop') {
+    if (isLoopingMode) {
       source.loopStart = startTime
       source.loopEnd = endTime
       activePadSourcesRef.current.set(padId, { source, gainNode, pannerNode })
@@ -1802,18 +2355,24 @@ function App() {
         activePadSourcesRef.current.delete(padId)
         if (!fromSequence) {
           setActivePadIds((current) => current.filter((currentPadId) => currentPadId !== padId))
-          setEditorPlayheadFraction(null)
+          clearPadPlayhead(padId)
         }
       }
     }
 
-    source.start(scheduledWhen ?? 0, startTime, playbackDuration)
+    if (isLoopingMode) {
+      source.start(scheduledWhen ?? 0, startTime)
+    } else {
+      source.start(scheduledWhen ?? 0, startTime, playbackDuration)
+    }
 
     if (!fromSequence) {
       startPlayheadAnimation(
+        padId,
         playbackSettings.reversed ? playbackSettings.endFraction : playbackSettings.startFraction,
         playbackSettings.reversed ? playbackSettings.startFraction : playbackSettings.endFraction,
         renderedDurationMs,
+        { loop: isLoopingMode },
       )
     }
 
@@ -1887,6 +2446,10 @@ function App() {
       const bankStepIndex = stepIndex % bankState.sequenceLength
 
       bankState.pads.forEach((pad) => {
+        if (bankState.sequenceMuted[pad.id]) {
+          return
+        }
+
         const isStepActive = bankState.stepPattern[pad.id]?.[bankStepIndex]
         if (!isStepActive) {
           return
@@ -2052,52 +2615,47 @@ function App() {
     field: 'startFraction' | 'endFraction',
     nextPercent: number,
   ) => {
-    updateCurrentBank((bank) => {
-      const existing = bank.playbackSettings[padId] ?? { startFraction: 0, endFraction: 1, semitoneOffset: 0, gain: 1, pan: 0, playbackMode: 'one-shot', reversed: false }
-      const nextValue = nextPercent / 100
-
-      if (field === 'startFraction') {
-        const startFraction = Math.min(nextValue, existing.endFraction - 0.01)
-        return {
-          ...bank,
-          playbackSettings: {
-            ...bank.playbackSettings,
-            [padId]: {
-              ...existing,
-              startFraction,
-            },
-          },
+    const existing = currentBankState.playbackSettings[padId] ?? { startFraction: 0, endFraction: 1, semitoneOffset: 0, gain: 1, pan: 0, playbackMode: 'one-shot', reversed: false }
+    const nextValue = nextPercent / 100
+    const nextSettings = field === 'startFraction'
+      ? {
+          ...existing,
+          startFraction: Math.min(nextValue, existing.endFraction - 0.01),
         }
-      }
+      : {
+          ...existing,
+          endFraction: Math.max(nextValue, existing.startFraction + 0.01),
+        }
 
-      const endFraction = Math.max(nextValue, existing.startFraction + 0.01)
-      return {
-        ...bank,
-        playbackSettings: {
-          ...bank.playbackSettings,
-          [padId]: {
-            ...existing,
-            endFraction,
-          },
-        },
-      }
-    })
+    updateCurrentBank((bank) => ({
+      ...bank,
+      playbackSettings: {
+        ...bank.playbackSettings,
+        [padId]: nextSettings,
+      },
+    }))
+
+    if (nextSettings.playbackMode === 'loop' || nextSettings.playbackMode === 'gate-loop') {
+      syncActivePadLoopWindow(padId, nextSettings)
+    }
   }
 
   const updateSemitoneOffset = (padId: string, nextValue: number) => {
-    updateCurrentBank((bank) => {
-      const existing = bank.playbackSettings[padId] ?? { startFraction: 0, endFraction: 1, semitoneOffset: 0, gain: 1, pan: 0, playbackMode: 'one-shot', reversed: false }
-      return {
-        ...bank,
-        playbackSettings: {
-          ...bank.playbackSettings,
-          [padId]: {
-            ...existing,
-            semitoneOffset: nextValue,
-          },
-        },
-      }
-    })
+    const existing = currentBankState.playbackSettings[padId] ?? { startFraction: 0, endFraction: 1, semitoneOffset: 0, gain: 1, pan: 0, playbackMode: 'one-shot', reversed: false }
+    const nextSettings = {
+      ...existing,
+      semitoneOffset: nextValue,
+    }
+
+    updateCurrentBank((bank) => ({
+      ...bank,
+      playbackSettings: {
+        ...bank.playbackSettings,
+        [padId]: nextSettings,
+      },
+    }))
+
+    syncActivePadPitch(padId, nextSettings)
   }
 
   const updatePadGain = (padId: string, nextValue: number) => {
@@ -2166,6 +2724,8 @@ function App() {
       activePadSourcesRef.current.delete(padId)
     }
 
+    clearPadPlayhead(padId)
+
     if (!keepActiveVisual) {
       setActivePadIds((current) => current.filter((currentPadId) => currentPadId !== padId))
     }
@@ -2228,6 +2788,16 @@ function App() {
         },
       }
     })
+  }
+
+  const toggleSequencePadMute = (padId: string) => {
+    updateCurrentBank((bank) => ({
+      ...bank,
+      sequenceMuted: {
+        ...bank.sequenceMuted,
+        [padId]: !(bank.sequenceMuted[padId] ?? false),
+      },
+    }))
   }
 
   const updateSequenceLength = (nextLength: number) => {
@@ -2480,22 +3050,44 @@ function App() {
     }
   }
 
-  const startPlayheadAnimation = (startFraction: number, endFraction: number, durationMs: number) => {
+  const clearPadPlayhead = (padId?: string) => {
+    if (padId && activePadPlayheadIdRef.current !== padId) {
+      return
+    }
+
     if (playheadFrameRef.current) {
       window.cancelAnimationFrame(playheadFrameRef.current)
       playheadFrameRef.current = null
     }
 
+    activePadPlayheadIdRef.current = null
+    setEditorPlayheadFraction(null)
+  }
+
+  const startPlayheadAnimation = (
+    padId: string,
+    startFraction: number,
+    endFraction: number,
+    durationMs: number,
+    options?: { loop?: boolean },
+  ) => {
+    if (playheadFrameRef.current) {
+      window.cancelAnimationFrame(playheadFrameRef.current)
+      playheadFrameRef.current = null
+    }
+
+    activePadPlayheadIdRef.current = padId
     const startedAt = performance.now()
     const safeDurationMs = Math.max(16, durationMs)
+    const shouldLoop = options?.loop ?? false
 
     const tick = (now: number) => {
       const elapsed = now - startedAt
-      const progress = Math.min(1, elapsed / safeDurationMs)
+      const progress = shouldLoop ? (elapsed % safeDurationMs) / safeDurationMs : Math.min(1, elapsed / safeDurationMs)
       const nextFraction = startFraction + (endFraction - startFraction) * progress
       setEditorPlayheadFraction(nextFraction)
 
-      if (progress < 1) {
+      if (shouldLoop || progress < 1) {
         playheadFrameRef.current = window.requestAnimationFrame(tick)
         return
       }
@@ -2513,6 +3105,7 @@ function App() {
       playheadFrameRef.current = null
     }
 
+    activePadPlayheadIdRef.current = null
     const tick = () => {
       const audio = loopAudioRef.current
       if (!audio) {
@@ -2543,6 +3136,7 @@ function App() {
       playheadFrameRef.current = null
     }
 
+    activePadPlayheadIdRef.current = null
     if (loopAudioRef.current) {
       loopAudioRef.current.pause()
       loopAudioRef.current.currentTime = 0
@@ -2634,6 +3228,68 @@ function App() {
     } catch (error) {
       console.error(error)
       setIsLoopPlaying(false)
+    }
+  }
+
+  const normalizeLoopSource = async () => {
+    if (!generatedLoop || isNormalizingLoop) {
+      return
+    }
+
+    try {
+      setIsNormalizingLoop(true)
+      stopLoopPlayback()
+
+      const response = await fetch(generatedLoop.sampleUrl)
+      if (!response.ok) {
+        throw new Error('Failed to load the current loop source for normalization.')
+      }
+
+      const audioData = await response.arrayBuffer()
+      const context = getAudioContext()
+      const decodedBuffer = await context.decodeAudioData(audioData.slice(0))
+      let peak = 0
+
+      for (let channelIndex = 0; channelIndex < decodedBuffer.numberOfChannels; channelIndex += 1) {
+        const channelData = decodedBuffer.getChannelData(channelIndex)
+
+        for (let sampleIndex = 0; sampleIndex < channelData.length; sampleIndex += 1) {
+          peak = Math.max(peak, Math.abs(channelData[sampleIndex] ?? 0))
+        }
+      }
+
+      if (!Number.isFinite(peak) || peak <= 0.0001) {
+        throw new Error('The loop source is effectively silent, so there is nothing to normalize.')
+      }
+
+      const targetPeak = 0.98
+      const normalizeGain = targetPeak / peak
+      const normalizedBuffer = context.createBuffer(decodedBuffer.numberOfChannels, decodedBuffer.length, decodedBuffer.sampleRate)
+
+      for (let channelIndex = 0; channelIndex < decodedBuffer.numberOfChannels; channelIndex += 1) {
+        const sourceData = decodedBuffer.getChannelData(channelIndex)
+        const targetData = normalizedBuffer.getChannelData(channelIndex)
+
+        for (let sampleIndex = 0; sampleIndex < sourceData.length; sampleIndex += 1) {
+          targetData[sampleIndex] = clamp((sourceData[sampleIndex] ?? 0) * normalizeGain, -1, 1)
+        }
+      }
+
+      preservedLoopChopRegionsRef.current = loopChopRegions
+      preservedSelectedChopIdRef.current = selectedChopId
+
+      setGeneratedLoop({
+        ...generatedLoop,
+        sampleFile: `${sanitizeDownloadName(generatedLoop.sampleName)}-normalized.wav`,
+        sampleUrl: createEphemeralAudioUrl(encodeWavBlob(normalizedBuffer)),
+        durationSeconds: decodedBuffer.duration,
+      })
+      setGenerationMessage(`Normalized the loop source to a ${targetPeak.toFixed(2)} peak and kept the existing chops.`)
+    } catch (error) {
+      console.error('Loop normalization failed.', error)
+      setGenerationMessage(error instanceof Error ? error.message : 'Loop normalization failed.')
+    } finally {
+      setIsNormalizingLoop(false)
     }
   }
 
@@ -2887,6 +3543,36 @@ function App() {
                     </button>
                   ) : null}
                 </div>
+                <label className="editor-transform-bar">
+                  <input
+                    type="text"
+                    value={editorTransformPrompt}
+                    onChange={(event) => setEditorTransformPrompt(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter') {
+                        return
+                      }
+
+                      event.preventDefault()
+                      void transformCurrentEditorAudio()
+                    }}
+                    maxLength={240}
+                    placeholder={editorSource === 'loop'
+                      ? 'Make this loop a breathy woman vocal with glossy pop tone'
+                      : 'Make this a woman voice with airy harmonies and soft rasp'}
+                    aria-label="Describe how ElevenLabs should transform this sound"
+                  />
+                  <button
+                    type="button"
+                    className="work-tab editor-transform-button"
+                    onClick={() => {
+                      void transformCurrentEditorAudio()
+                    }}
+                    disabled={isTransformingEditorAudio || editorTransformPrompt.trim().length < 20}
+                  >
+                    {isTransformingEditorAudio ? 'Sending...' : 'Generate'}
+                  </button>
+                </label>
                 <div className="work-surface-actions editor-toolbar-actions">
                   <button
                     type="button"
@@ -2916,7 +3602,9 @@ function App() {
                   onRegionSelect={editorSource === 'loop' && generatedLoop ? handleLoopRegionSelect : undefined}
                   onRegionsChange={editorSource === 'loop' && generatedLoop ? handleLoopRegionsChange : undefined}
                   onMarkerChange={editorSource === 'pad' ? (field, nextFraction) => updateTrim(selectedPad.id, field === 'start' ? 'startFraction' : 'endFraction', nextFraction * 100) : undefined}
-                  onWaveformClick={editorSource === 'pad' ? () => triggerPad(selectedPad.id) : undefined}
+                  onWaveformPointerDown={editorSource === 'pad' ? () => triggerPad(selectedPad.id) : undefined}
+                  onWaveformPointerUp={editorSource === 'pad' ? () => releasePad(selectedPad.id) : undefined}
+                  onWaveformPointerLeave={editorSource === 'pad' ? () => releasePad(selectedPad.id) : undefined}
                 />
               </div>
               {editorSource === 'pad' ? (
@@ -2950,7 +3638,7 @@ function App() {
 
                   <div className="playback-mode-group editor-playback-mode-group">
                     <div className="editor-playback-mode-radios" role="radiogroup" aria-label="Playback mode">
-                      {(['one-shot', 'loop', 'gate', 'gate-loop'] as const).map((mode) => (
+                      {(['one-shot', 'gate-loop', 'gate', 'loop'] as const).map((mode) => (
                         <button
                           key={mode}
                           type="button"
@@ -3041,6 +3729,16 @@ function App() {
                   <>
                     <button type="button" className="primary-button" onClick={() => { void toggleLoopPreview() }}>
                       {isLoopPlaying ? 'Stop Loop' : 'Play Loop'}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        void normalizeLoopSource()
+                      }}
+                      disabled={isNormalizingLoop}
+                    >
+                      {isNormalizingLoop ? 'Normalizing...' : 'Normalize'}
                     </button>
                     <button
                       type="button"
@@ -3343,7 +4041,7 @@ function App() {
               <div className="sequencer-grid-scroll">
                 <div
                   className="sequencer-grid"
-                  style={{ gridTemplateColumns: `11rem repeat(${currentSequenceLength}, minmax(2.35rem, 2.35rem))` }}
+                  style={{ gridTemplateColumns: `12.75rem repeat(${currentSequenceLength}, minmax(2.35rem, 2.35rem))` }}
                 >
                   <div className="sequencer-corner">Pads</div>
                   {Array.from({ length: currentSequenceLength }, (_, stepIndex) => (
@@ -3355,65 +4053,84 @@ function App() {
                     </div>
                   ))}
 
-                  {currentBankPads.map((pad) => (
-                    <Fragment key={pad.id}><button
-                      key={`${pad.id}-label`}
-                      type="button"
-                      className={selectedPad.id === pad.id ? 'sequencer-lane-label is-selected' : 'sequencer-lane-label'}
-                      aria-pressed={selectedPad.id === pad.id}
-                      onClick={() => {
-                        updateCurrentBank((bank) => ({ ...bank, selectedPadId: pad.id }))
-                      }}
-                      onPointerDown={() => triggerPad(pad.id)}
-                      onPointerUp={() => releasePad(pad.id)}
-                      onPointerLeave={() => releasePad(pad.id)}
-                      onBlur={() => releasePad(pad.id)}
-                      onKeyDown={(event) => {
-                        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) {
-                          return
-                        }
+                  {currentBankPads.map((pad) => {
+                    const isSelectedPad = selectedPad.id === pad.id
+                    const isSequencePadMuted = currentSequenceMuted[pad.id] ?? false
 
-                        event.preventDefault()
-                        triggerPad(pad.id)
-                      }}
-                      onKeyUp={(event) => {
-                        if (event.key !== 'Enter' && event.key !== ' ') {
-                          return
-                        }
+                    return (
+                      <Fragment key={pad.id}>
+                        <div className={isSelectedPad ? 'sequencer-lane-header is-selected' : 'sequencer-lane-header'}>
+                          <button
+                            type="button"
+                            className="sequencer-lane-label"
+                            aria-pressed={isSelectedPad}
+                            onClick={() => {
+                              updateCurrentBank((bank) => ({ ...bank, selectedPadId: pad.id }))
+                            }}
+                            onPointerDown={() => triggerPad(pad.id)}
+                            onPointerUp={() => releasePad(pad.id)}
+                            onPointerLeave={() => releasePad(pad.id)}
+                            onBlur={() => releasePad(pad.id)}
+                            onKeyDown={(event) => {
+                              if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) {
+                                return
+                              }
 
-                        event.preventDefault()
-                        releasePad(pad.id)
-                      }}
-                    >
-                      <strong>{pad.label}</strong>
-                      <span>{pad.sampleName}</span>
-                    </button>{Array.from({ length: currentSequenceLength }, (_, stepIndex) => {
-                      const isActive = currentStepPattern[pad.id]?.[stepIndex] ?? false
-                      const isCurrentStep = sequencePlayheadStep === stepIndex
-                      const isQuarter = stepIndex % 4 === 0
-                      const className = isActive
-                        ? isCurrentStep
-                          ? 'sequencer-step-button is-active is-current'
-                          : isQuarter
-                            ? 'sequencer-step-button is-active is-accent'
-                            : 'sequencer-step-button is-active'
-                        : isCurrentStep
-                          ? 'sequencer-step-button is-current'
-                          : isQuarter
-                            ? 'sequencer-step-button is-accent'
-                            : 'sequencer-step-button'
+                              event.preventDefault()
+                              triggerPad(pad.id)
+                            }}
+                            onKeyUp={(event) => {
+                              if (event.key !== 'Enter' && event.key !== ' ') {
+                                return
+                              }
 
-                      return (
-                        <button
-                          key={`${pad.id}-${stepIndex}`}
-                          type="button"
-                          aria-pressed={isActive}
-                          className={className}
-                          onClick={() => toggleSequenceStep(pad.id, stepIndex)}
-                        />
-                      )
-                    })}</Fragment>
-                  ))}
+                              event.preventDefault()
+                              releasePad(pad.id)
+                            }}
+                          >
+                            <strong>{pad.label}</strong>
+                            <span>{pad.sampleName}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={isSequencePadMuted ? 'sequencer-pad-mute-button is-muted' : 'sequencer-pad-mute-button'}
+                            aria-pressed={isSequencePadMuted}
+                            aria-label={`${isSequencePadMuted ? 'Unmute' : 'Mute'} ${pad.label} in sequence`}
+                            title={`${isSequencePadMuted ? 'Unmute' : 'Mute'} ${pad.label} in sequence`}
+                            onClick={() => toggleSequencePadMute(pad.id)}
+                          >
+                            M
+                          </button>
+                        </div>
+                        {Array.from({ length: currentSequenceLength }, (_, stepIndex) => {
+                          const isActive = currentStepPattern[pad.id]?.[stepIndex] ?? false
+                          const isCurrentStep = sequencePlayheadStep === stepIndex
+                          const isQuarter = stepIndex % 4 === 0
+                          const className = isActive
+                            ? isCurrentStep
+                              ? 'sequencer-step-button is-active is-current'
+                              : isQuarter
+                                ? 'sequencer-step-button is-active is-accent'
+                                : 'sequencer-step-button is-active'
+                            : isCurrentStep
+                              ? 'sequencer-step-button is-current'
+                              : isQuarter
+                                ? 'sequencer-step-button is-accent'
+                                : 'sequencer-step-button'
+
+                          return (
+                            <button
+                              key={`${pad.id}-${stepIndex}`}
+                              type="button"
+                              aria-pressed={isActive}
+                              className={className}
+                              onClick={() => toggleSequenceStep(pad.id, stepIndex)}
+                            />
+                          )
+                        })}
+                      </Fragment>
+                    )
+                  })}
                 </div>
               </div>
             </div>
@@ -3422,7 +4139,7 @@ function App() {
       </header>
 
       <section className="workspace">
-        <section className="grid-panel panel">
+        <section className="pads panel">
           <div className="panel-heading">
             <p className="panel-kicker">Pads</p>
           </div>
@@ -3532,6 +4249,74 @@ function App() {
           <div className="generation-status" aria-live="polite">
             <span>{generationMessage}</span>
           </div>
+
+          <section className="mic-capture-panel" aria-label="Sample from microphone">
+            <div className="mic-capture-heading">
+              <div className="mic-capture-title">
+                <p className="transport-label">Sample from mic</p>
+                <strong>Capture a raw take for the sampler</strong>
+              </div>
+              <span className={micCaptureState === 'recording' ? 'mic-capture-timer is-live' : 'mic-capture-timer'}>
+                {micCaptureClockLabel}
+              </span>
+            </div>
+
+            <p className="mic-capture-status" aria-live="polite">
+              {micRecordingSupported ? micCaptureMessage : 'This browser does not expose microphone recording through MediaRecorder yet.'}
+            </p>
+
+            <div className="mic-capture-controls">
+              <button
+                type="button"
+                className="primary-button mic-capture-control"
+                onClick={() => {
+                  void startMicRecording()
+                }}
+                disabled={!micRecordingSupported || micCaptureState === 'requesting' || micCaptureState === 'recording' || micCaptureState === 'processing'}
+              >
+                <Circle size={15} strokeWidth={2.1} aria-hidden="true" />
+                <span>
+                  {micCaptureState === 'requesting'
+                    ? 'Allow Mic...'
+                    : micCaptureState === 'recording'
+                      ? 'Recording...'
+                      : 'Record Take'}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="secondary-button mic-capture-control"
+                onClick={stopMicRecording}
+                disabled={micCaptureState !== 'recording'}
+              >
+                <Square size={15} strokeWidth={2.1} aria-hidden="true" />
+                <span>{micCaptureState === 'processing' ? 'Finishing...' : 'Stop'}</span>
+              </button>
+            </div>
+
+            {recordedTake ? (
+              <>
+                <div className="mic-capture-waveform">
+                  <SampleWaveform
+                    audioUrl={recordedTake.previewUrl}
+                    durationSeconds={recordedTake.durationSeconds}
+                  />
+                </div>
+                <audio className="mic-capture-player" controls src={recordedTake.previewUrl} />
+                <div className="mic-capture-actions">
+                  <button type="button" className="primary-button" onClick={assignRecordedTakeToSelectedPad}>
+                    Assign to {selectedPad.label}
+                  </button>
+                  <button type="button" className="secondary-button" onClick={openRecordedTakeInEditor}>
+                    Chop in Editor
+                  </button>
+                  <button type="button" className="secondary-button" onClick={clearRecordedTake}>
+                    Discard
+                  </button>
+                </div>
+              </>
+            ) : null}
+          </section>
         </section>
 
       </section>

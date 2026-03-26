@@ -317,6 +317,28 @@ button:active:not(:disabled) {
   flex-wrap: wrap;
 }
 
+.editor-transform-bar {
+  flex: 1 1 20rem;
+  min-width: min(26rem, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.editor-transform-bar input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--panel-border);
+  background: color-mix(in oklch, var(--panel-bg) 92%, white);
+  color: var(--text-strong);
+  padding: 0.52rem 0.68rem;
+}
+
+.editor-transform-button {
+  white-space: nowrap;
+}
+
 .waveform-panel {
   position: relative;
   border: 1px solid var(--panel-border);
@@ -872,6 +894,11 @@ button:active:not(:disabled) {
   margin-top: 0.7rem;
 }
 
+.generation-status {
+  margin-top: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+
 .preset-chip {
   text-align: left;
   color: var(--text-strong);
@@ -888,6 +915,92 @@ button:active:not(:disabled) {
   min-height: 1.5rem;
   color: var(--text-muted);
   font-size: 0.88rem;
+}
+
+.mic-capture-panel {
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid var(--panel-border);
+  align-content: start;
+}
+
+.mic-capture-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.mic-capture-title {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.mic-capture-title strong {
+  color: var(--text-strong);
+  font-size: 0.98rem;
+  letter-spacing: 0.02em;
+}
+
+.mic-capture-timer {
+  min-width: 3.5rem;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.mic-capture-timer.is-live {
+  color: var(--accent-warm);
+}
+
+.mic-capture-status {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+}
+
+.mic-capture-controls,
+.mic-capture-actions {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.mic-capture-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.mic-capture-actions {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mic-capture-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+}
+
+.mic-capture-waveform {
+  position: relative;
+  min-height: 6rem;
+  border: 1px solid var(--panel-border);
+  background: color-mix(in oklch, var(--panel-bg) 90%, white);
+  overflow: hidden;
+}
+
+.mic-capture-player {
+  width: 100%;
+}
+
+.pads .panel-kicker {
+  margin-bottom: 0.7rem;
+}
+
+.pads .bank-switcher {
+  margin-bottom: 0.7rem;
 }
 
 .grid-panel {
@@ -1263,7 +1376,7 @@ button:active:not(:disabled) {
 
 .sequencer-corner,
 .sequencer-step-label,
-.sequencer-lane-label,
+.sequencer-lane-header,
 .sequencer-step-button {
   border-right: 1px solid var(--panel-border);
   border-bottom: 1px solid var(--panel-border);
@@ -1281,6 +1394,10 @@ button:active:not(:disabled) {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.72rem;
+}
+
+.prompt-panel .panel-heading {
+  margin-bottom: 0.7rem;
 }
 
 .sequencer-step-label {
@@ -1304,19 +1421,27 @@ button:active:not(:disabled) {
   color: var(--text-strong);
 }
 
-.sequencer-lane-label {
+.sequencer-lane-header {
   position: sticky;
   left: 0;
   z-index: 1;
   display: grid;
-  gap: 0.15rem;
-  align-content: center;
-  justify-items: stretch;
-  padding: 0.65rem 0.8rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: stretch;
+  padding: 0.4rem 0.55rem 0.4rem 0.8rem;
   min-width: 0;
   min-height: 3.2rem;
-  text-align: left;
   background: color-mix(in oklch, var(--panel-bg) 98%, white);
+}
+
+.sequencer-lane-label {
+  display: grid;
+  gap: 0.15rem;
+  align-content: center;
+  min-width: 0;
+  text-align: left;
+  background: transparent;
 }
 
 .sequencer-lane-label strong {
@@ -1337,8 +1462,34 @@ button:active:not(:disabled) {
   white-space: nowrap;
 }
 
-.sequencer-lane-label.is-selected {
+.sequencer-lane-header.is-selected {
   background: color-mix(in oklch, var(--accent-gold) 18%, white);
+}
+
+.sequencer-pad-mute-button {
+  align-self: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  border-radius: 0.4rem;
+  background: color-mix(in oklch, var(--panel-bg) 86%, white);
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.sequencer-pad-mute-button.is-muted {
+  background: color-mix(in oklch, var(--accent-warm) 55%, white);
+  color: var(--text-strong);
+}
+
+.sequencer-pad-mute-button:hover {
+  background: color-mix(in oklch, var(--accent-gold) 22%, white);
+}
+
+.sequencer-pad-mute-button.is-muted:hover {
+  background: color-mix(in oklch, var(--accent-warm) 65%, white);
 }
 
 .sequencer-step-button {
@@ -1433,6 +1584,12 @@ button:active:not(:disabled) {
     justify-content: flex-start;
   }
 
+  .editor-transform-bar {
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
   .editor-pad-meta {
     grid-template-columns: 1fr 1fr;
   }
@@ -1468,6 +1625,11 @@ button:active:not(:disabled) {
 
   .prompt-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mic-capture-controls,
+  .mic-capture-actions {
+    grid-template-columns: 1fr;
   }
 
   .grid-status {
