@@ -1,4 +1,3 @@
-- midi mapping (6)
 - rename session to project, have a projects select (4)
 - edit sample type/description text (2)
 - note repeat (4)
@@ -18,5 +17,6 @@
 - key and scale selection?  these get auto fed into our generative tool calls
 - some bugs with the chromatic punch in recording 
 - better default kits: 1 loop, 1 bass, one reg drum, one sea shell drum
+- better example prompts
 
 - design looks horrible (7)
