@@ -1,5 +1,5 @@
 import { Fragment, startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { Circle, Dices, Download, Metronome, Play, Square } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Circle, Dices, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import * as Slider from '@radix-ui/react-slider'
 import { type BankKitId, type Pad, type PadSourceType } from './mock-kit'
 import { starterBankPads } from './kit-generation'
@@ -8,6 +8,9 @@ import { getEffectConfig, getEffectDefaults, getEffectsList, type EffectConfig }
 
 const bankIds = ['A', 'B', 'C', 'D'] as const
 const loopChopCount = 16
+const midiStorageKey = 'mcp-2000-midi-pad-notes'
+const midiSelectedInputStorageKey = 'mcp-2000-midi-input-id'
+const defaultMidiBaseNote = 36
 
 const promptPresets = [
   'Boom bap drum kit with dusty hats and a warm vinyl kick',
@@ -22,11 +25,36 @@ const groupLabels: Record<Pad['group'], string> = {
   fx: 'FX',
 }
 
-const sourceLabels: Record<PadSourceType, string> = {
-  generated: 'Generated',
-  uploaded: 'Uploaded',
-  resampled: 'Resampled',
+const padSlotIds = starterBankPads.A.map((pad) => pad.id)
+
+type ChromaticKeyDefinition = {
+  id: string
+  keyboardKey: string
+  semitoneOffset: number
+  kind: 'white' | 'black'
+  blackCenterPercent?: number
 }
+
+const chromaticBaseOctave = 3
+const chromaticMinOctave = 1
+const chromaticMaxOctave = 6
+const chromaticNoteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const
+const chromaticKeyLayout: ChromaticKeyDefinition[] = [
+  { id: 'c', keyboardKey: 'A', semitoneOffset: 0, kind: 'white' },
+  { id: 'c-sharp', keyboardKey: 'W', semitoneOffset: 1, kind: 'black', blackCenterPercent: 12.5 },
+  { id: 'd', keyboardKey: 'S', semitoneOffset: 2, kind: 'white' },
+  { id: 'd-sharp', keyboardKey: 'E', semitoneOffset: 3, kind: 'black', blackCenterPercent: 25 },
+  { id: 'e', keyboardKey: 'D', semitoneOffset: 4, kind: 'white' },
+  { id: 'f', keyboardKey: 'F', semitoneOffset: 5, kind: 'white' },
+  { id: 'f-sharp', keyboardKey: 'T', semitoneOffset: 6, kind: 'black', blackCenterPercent: 50 },
+  { id: 'g', keyboardKey: 'G', semitoneOffset: 7, kind: 'white' },
+  { id: 'g-sharp', keyboardKey: 'Y', semitoneOffset: 8, kind: 'black', blackCenterPercent: 62.5 },
+  { id: 'a', keyboardKey: 'H', semitoneOffset: 9, kind: 'white' },
+  { id: 'a-sharp', keyboardKey: 'U', semitoneOffset: 10, kind: 'black', blackCenterPercent: 75 },
+  { id: 'b', keyboardKey: 'J', semitoneOffset: 11, kind: 'white' },
+  { id: 'high-c', keyboardKey: 'K', semitoneOffset: 12, kind: 'white' },
+]
+const chromaticKeyboardMap = new Map(chromaticKeyLayout.map((key) => [key.keyboardKey, key]))
 
 type BankId = (typeof bankIds)[number]
 type EngineStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -84,6 +112,45 @@ type ActivePadAudio = {
   pannerNode: StereoPannerNode | null
 }
 
+type ActiveChromaticNoteAudio = ActivePadAudio & {
+  padId: string
+  playbackMode: PlaybackMode
+}
+
+type ActiveLoopPlayback = {
+  id: number
+  source: AudioBufferSourceNode
+  gainNode: GainNode
+  timelineDurationSeconds: number
+  playbackStartSeconds: number
+  playbackSpanSeconds: number
+  startedAtContextTime: number
+  loop: boolean
+}
+
+type MidiPadNoteMappings = Record<string, number | null>
+
+type NavigatorWithMidi = Navigator & {
+  requestMIDIAccess?: (options?: { sysex?: boolean }) => Promise<MIDIAccess>
+}
+
+type WebAudioContext = AudioContext | OfflineAudioContext
+
+type GlobalEffectRoutingOptions = {
+  context: WebAudioContext
+  effectInput: GainNode
+  masterGain: GainNode
+  effectId: string
+  effectEnabled: boolean
+  isEffectSupported: boolean
+  effectParams: Record<string, number>
+}
+
+type GlobalEffectRoutingResult = {
+  cleanup: () => void
+  runtime: ActiveEffectRuntime | null
+}
+
 type PadPlaybackSetting = {
   startFraction: number
   endFraction: number
@@ -100,6 +167,7 @@ type BankState = {
   playbackSettings: Record<string, PadPlaybackSetting>
   sequenceLength: number
   stepPattern: Record<string, boolean[]>
+  stepSemitoneOffsets: Record<string, number[]>
   sequenceMuted: Record<string, boolean>
 }
 
@@ -128,6 +196,9 @@ const getEffectiveBankGain = (
 const createInitialStepPattern = (pads: Pad[], stepCount = 16) =>
   Object.fromEntries(pads.map((pad) => [pad.id, Array.from({ length: stepCount }, () => false)])) as Record<string, boolean[]>
 
+const createInitialStepSemitoneOffsets = (pads: Pad[], stepCount = 16) =>
+  Object.fromEntries(pads.map((pad) => [pad.id, Array.from({ length: stepCount }, () => 0)])) as Record<string, number[]>
+
 const createInitialSequenceMutedState = (pads: Pad[]) =>
   Object.fromEntries(pads.map((pad) => [pad.id, false])) as Record<string, boolean>
 
@@ -142,6 +213,7 @@ const createInitialBankState = (bankId: BankKitId): BankState => ({
   playbackSettings: createInitialPlaybackSettings(starterBankPads[bankId]),
   sequenceLength: 16,
   stepPattern: createInitialStepPattern(starterBankPads[bankId]),
+  stepSemitoneOffsets: createInitialStepSemitoneOffsets(starterBankPads[bankId]),
   sequenceMuted: createInitialSequenceMutedState(starterBankPads[bankId]),
 })
 
@@ -262,7 +334,7 @@ const buildDistortionCurve = (amount: number) => {
   return curve
 }
 
-const buildImpulseResponse = (context: AudioContext, roomSize: number, decaySeconds: number) => {
+const buildImpulseResponse = (context: WebAudioContext, roomSize: number, decaySeconds: number) => {
   const duration = Math.max(0.2, decaySeconds)
   const length = Math.max(1, Math.floor(context.sampleRate * duration))
   const impulse = context.createBuffer(2, length, context.sampleRate)
@@ -280,7 +352,7 @@ const buildImpulseResponse = (context: AudioContext, roomSize: number, decaySeco
   return impulse
 }
 
-const createBitcrusherNode = (context: AudioContext, bits: number, normalRange: number) => {
+const createBitcrusherNode = (context: WebAudioContext, bits: number, normalRange: number) => {
   const processor = context.createScriptProcessor(4096, 2, 2) as BitcrusherProcessorNode
   let step = Math.pow(0.5, Math.max(1, Math.round(bits)))
   let sampleHold = Math.max(0.01, normalRange)
@@ -331,7 +403,74 @@ const getLoopChopRate = (loopSize: number, stutterRate: number) => {
   return clamp(stutterRate / divisor, 1, 32)
 }
 
-const createReversedBuffer = (context: AudioContext, buffer: AudioBuffer) => {
+const getPadPlaybackWindow = (sampleBuffer: AudioBuffer, playbackSettings: PadPlaybackSetting, semitoneOffset = playbackSettings.semitoneOffset) => {
+  const forwardStartTime = sampleBuffer.duration * playbackSettings.startFraction
+  const forwardEndTime = sampleBuffer.duration * playbackSettings.endFraction
+  const startTime = playbackSettings.reversed ? sampleBuffer.duration - forwardEndTime : forwardStartTime
+  const endTime = playbackSettings.reversed ? sampleBuffer.duration - forwardStartTime : forwardEndTime
+  const playbackDuration = Math.max(0.01, endTime - startTime)
+  const playbackRate = Math.pow(2, semitoneOffset / 12)
+
+  return {
+    startTime,
+    endTime,
+    playbackDuration,
+    playbackRate,
+  }
+}
+
+const getChromaticRelativeSemitone = (octave: number, semitoneOffset: number) => ((octave - chromaticBaseOctave) * 12) + semitoneOffset
+
+const getChromaticNoteLabel = (octave: number, semitoneOffset: number) => {
+  const absoluteSemitone = octave * 12 + semitoneOffset
+  const noteIndex = ((absoluteSemitone % chromaticNoteNames.length) + chromaticNoteNames.length) % chromaticNoteNames.length
+  const noteOctave = Math.floor(absoluteSemitone / chromaticNoteNames.length)
+  return `${chromaticNoteNames[noteIndex]}${noteOctave}`
+}
+
+const buildChromaticNoteId = (bankId: BankId, padId: string, relativeSemitone: number) => `${bankId}:${padId}:${relativeSemitone}`
+
+const formatSemitoneOffsetLabel = (value: number) => `${value > 0 ? '+' : ''}${value} st`
+
+const getEffectTailPaddingSeconds = (
+  effectId: string,
+  effectParams: Record<string, number>,
+  effectEnabled: boolean,
+  isEffectSupported: boolean,
+) => {
+  if (!effectEnabled || !isEffectSupported) {
+    return 0
+  }
+
+  if (effectId === 'delay') {
+    return clamp((effectParams.delayTime ?? 0.2) * (4 + clamp(effectParams.feedback ?? 0.5, 0, 0.95) * 8), 1, 8)
+  }
+
+  if (effectId === 'taptempodelay') {
+    const delaySeconds = getSubdivisionSeconds(effectParams.tapTempo ?? 120, effectParams.subdivision ?? 1)
+    return clamp(delaySeconds * (4 + clamp(effectParams.feedback ?? 0.4, 0, 0.95) * 8), 1, 8)
+  }
+
+  if (effectId === 'reverb') {
+    return clamp((effectParams.decay ?? 2) + 0.75, 1, 12)
+  }
+
+  if (effectId === 'hallreverb') {
+    return clamp((effectParams.preDelay ?? 0.03) + (effectParams.decay ?? 4) + 1, 1.5, 12)
+  }
+
+  if (effectId === 'tapestop') {
+    return clamp((effectParams.stopTime ?? 1) + (effectParams.restartTime ?? 0.5) + 0.75, 1, 6)
+  }
+
+  if (effectId === 'lofitape') {
+    return 1.25
+  }
+
+  return 0.35
+}
+
+const createReversedBuffer = (context: WebAudioContext, buffer: AudioBuffer) => {
   const reversedBuffer = context.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate)
 
   for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
@@ -405,6 +544,476 @@ const triggerBlobDownload = (blob: Blob, fileName: string) => {
   downloadLink.click()
   downloadLink.remove()
   window.setTimeout(() => URL.revokeObjectURL(exportUrl), 0)
+}
+
+const createGlobalEffectRouting = ({
+  context,
+  effectInput,
+  masterGain,
+  effectId,
+  effectEnabled,
+  isEffectSupported,
+  effectParams,
+}: GlobalEffectRoutingOptions): GlobalEffectRoutingResult => {
+  try {
+    effectInput.disconnect()
+  } catch {}
+
+  if (!effectEnabled || !isEffectSupported) {
+    effectInput.connect(masterGain)
+    return {
+      cleanup: () => {
+        try {
+          effectInput.disconnect()
+        } catch {}
+      },
+      runtime: null,
+    }
+  }
+
+  const dryGain = context.createGain()
+  const wetGain = context.createGain()
+  const wet = clamp(effectParams.wet ?? 0.5, 0, 1)
+  dryGain.gain.value = 1 - wet
+  wetGain.gain.value = wet
+
+  effectInput.connect(dryGain)
+  dryGain.connect(masterGain)
+
+  const cleanupNodes: AudioNode[] = [effectInput, dryGain, wetGain]
+  const cleanupSources: AudioScheduledSourceNode[] = []
+  const runtimeRefs: Record<string, unknown> = { dryGain, wetGain }
+
+  const startSource = (source: AudioScheduledSourceNode) => {
+    source.start()
+    cleanupSources.push(source)
+  }
+
+  const finishWetChain = (node: AudioNode) => {
+    node.connect(wetGain)
+    wetGain.connect(masterGain)
+  }
+
+  if (effectId === 'simplefilter') {
+    const filter = context.createBiquadFilter()
+    const filterType = ['lowpass', 'highpass', 'bandpass'][Math.max(0, Math.min(2, Math.round(effectParams.filterType ?? 0)))] as BiquadFilterType
+
+    filter.type = filterType
+    filter.frequency.value = clamp(effectParams.cutoffFreq ?? 2000, 20, 20000)
+    filter.Q.value = clamp(effectParams.resonance ?? 5, 0.0001, 30)
+
+    effectInput.connect(filter)
+    finishWetChain(filter)
+    cleanupNodes.push(filter)
+    runtimeRefs.filter = filter
+  } else if (effectId === 'autofilter') {
+    const filter = context.createBiquadFilter()
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+    const baseFreq = clamp(effectParams.baseFreq ?? 990, 20, 12000)
+    const depth = clamp(effectParams.depth ?? 0.8, 0, 1)
+    const octaves = clamp(effectParams.octaves ?? 1, 1, 6)
+
+    filter.type = 'lowpass'
+    filter.Q.value = 6
+    filter.frequency.value = baseFreq
+    lfo.type = 'sine'
+    lfo.frequency.value = clamp(effectParams.rate ?? 5, 0.1, 10)
+    lfoGain.gain.value = baseFreq * (Math.pow(2, octaves) - 1) * depth
+
+    effectInput.connect(filter)
+    finishWetChain(filter)
+    lfo.connect(lfoGain)
+    lfoGain.connect(filter.frequency)
+    startSource(lfo)
+    cleanupNodes.push(filter, lfoGain, lfo)
+    runtimeRefs.filter = filter
+    runtimeRefs.lfo = lfo
+    runtimeRefs.lfoGain = lfoGain
+  } else if (effectId === 'autopanner') {
+    const panner = typeof context.createStereoPanner === 'function' ? context.createStereoPanner() : null
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+
+    if (panner) {
+      lfo.type = getLfoWaveform(effectParams.type ?? 0)
+      lfo.frequency.value = clamp(effectParams.rate ?? 2, 0.1, 10)
+      lfoGain.gain.value = clamp(effectParams.depth ?? 0.8, 0, 1)
+      effectInput.connect(panner)
+      finishWetChain(panner)
+      lfo.connect(lfoGain)
+      lfoGain.connect(panner.pan)
+      startSource(lfo)
+      cleanupNodes.push(panner, lfoGain, lfo)
+      runtimeRefs.panner = panner
+      runtimeRefs.lfo = lfo
+      runtimeRefs.lfoGain = lfoGain
+    } else {
+      effectInput.connect(masterGain)
+    }
+  } else if (effectId === 'delay') {
+    const delay = context.createDelay(2)
+    const feedbackGain = context.createGain()
+
+    delay.delayTime.value = clamp(effectParams.delayTime ?? 0.2, 0.01, 2)
+    feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.5, 0, 0.95)
+
+    effectInput.connect(delay)
+    delay.connect(feedbackGain)
+    feedbackGain.connect(delay)
+    finishWetChain(delay)
+    cleanupNodes.push(delay, feedbackGain)
+    runtimeRefs.delay = delay
+    runtimeRefs.feedbackGain = feedbackGain
+  } else if (effectId === 'taptempodelay') {
+    const delay = context.createDelay(2)
+    const feedbackGain = context.createGain()
+    const delaySeconds = getSubdivisionSeconds(effectParams.tapTempo ?? 120, effectParams.subdivision ?? 1)
+
+    delay.delayTime.value = clamp(delaySeconds, 0.01, 2)
+    feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.4, 0, 0.95)
+
+    effectInput.connect(delay)
+    delay.connect(feedbackGain)
+    feedbackGain.connect(delay)
+    finishWetChain(delay)
+    cleanupNodes.push(delay, feedbackGain)
+    runtimeRefs.delay = delay
+    runtimeRefs.feedbackGain = feedbackGain
+  } else if (effectId === 'distortion') {
+    const shaper = context.createWaveShaper()
+    const toneFilter = context.createBiquadFilter()
+    const amount = clamp(effectParams.amount ?? 0.5, 0, 1)
+    const tone = clamp(effectParams.tone ?? 0.5, 0, 1)
+
+    shaper.curve = buildDistortionCurve(amount)
+    shaper.oversample = '4x'
+    toneFilter.type = 'lowpass'
+    toneFilter.frequency.value = 700 + tone * 7300
+
+    effectInput.connect(shaper)
+    shaper.connect(toneFilter)
+    finishWetChain(toneFilter)
+    cleanupNodes.push(shaper, toneFilter)
+    runtimeRefs.shaper = shaper
+    runtimeRefs.toneFilter = toneFilter
+  } else if (effectId === 'bitcrusher') {
+    const crusher = createBitcrusherNode(context, effectParams.bits ?? 8, effectParams.normalRange ?? 0.4)
+
+    effectInput.connect(crusher)
+    finishWetChain(crusher)
+    cleanupNodes.push(crusher)
+    runtimeRefs.crusher = crusher
+  } else if (effectId === 'reverb') {
+    const convolver = context.createConvolver()
+    convolver.buffer = buildImpulseResponse(context, clamp(effectParams.roomSize ?? 0.7, 0, 1), clamp(effectParams.decay ?? 2, 0.2, 10))
+
+    effectInput.connect(convolver)
+    finishWetChain(convolver)
+    cleanupNodes.push(convolver)
+    runtimeRefs.convolver = convolver
+  } else if (effectId === 'hallreverb') {
+    const preDelay = context.createDelay(1)
+    const convolver = context.createConvolver()
+    const damping = context.createBiquadFilter()
+
+    preDelay.delayTime.value = clamp(effectParams.preDelay ?? 0.03, 0, 1)
+    convolver.buffer = buildImpulseResponse(context, clamp(effectParams.roomSize ?? 0.8, 0, 1), clamp(effectParams.decay ?? 4, 0.2, 10))
+    damping.type = 'lowpass'
+    damping.frequency.value = clamp(effectParams.damping ?? 6000, 500, 12000)
+
+    effectInput.connect(preDelay)
+    preDelay.connect(convolver)
+    convolver.connect(damping)
+    finishWetChain(damping)
+    cleanupNodes.push(preDelay, convolver, damping)
+    runtimeRefs.preDelay = preDelay
+    runtimeRefs.convolver = convolver
+    runtimeRefs.damping = damping
+  } else if (effectId === 'compressor') {
+    const compressor = context.createDynamicsCompressor()
+    compressor.threshold.value = clamp(effectParams.threshold ?? -24, -60, 0)
+    compressor.ratio.value = clamp(effectParams.ratio ?? 4, 1, 20)
+    compressor.attack.value = clamp(effectParams.attack ?? 0.003, 0, 1)
+    compressor.knee.value = 24
+    compressor.release.value = 0.2
+
+    effectInput.connect(compressor)
+    finishWetChain(compressor)
+    cleanupNodes.push(compressor)
+    runtimeRefs.compressor = compressor
+  } else if (effectId === 'djeq') {
+    const low = context.createBiquadFilter()
+    const mid = context.createBiquadFilter()
+    const high = context.createBiquadFilter()
+
+    low.type = 'lowshelf'
+    low.frequency.value = 120
+    low.gain.value = clamp(effectParams.lowGain ?? 0, -15, 15)
+    mid.type = 'peaking'
+    mid.frequency.value = 1100
+    mid.Q.value = 1
+    mid.gain.value = clamp(effectParams.midGain ?? 0, -15, 15)
+    high.type = 'highshelf'
+    high.frequency.value = 4500
+    high.gain.value = clamp(effectParams.highGain ?? 0, -15, 15)
+
+    effectInput.connect(low)
+    low.connect(mid)
+    mid.connect(high)
+    finishWetChain(high)
+    cleanupNodes.push(low, mid, high)
+    runtimeRefs.low = low
+    runtimeRefs.mid = mid
+    runtimeRefs.high = high
+  } else if (effectId === 'chorus' || effectId === 'vibrato' || effectId === 'pitchshifter') {
+    const delay = context.createDelay(0.1)
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+    const baseDelay = effectId === 'pitchshifter'
+      ? 0.02 + clamp(Math.abs(effectParams.pitch ?? 0), 0, 12) * 0.0012
+      : effectId === 'vibrato'
+        ? 0.008
+        : clamp((effectParams.delay ?? 5) / 1000, 0.002, 0.03)
+    const depth = effectId === 'pitchshifter'
+      ? 0.001 + clamp(Math.abs(effectParams.pitch ?? 0), 0, 12) * 0.0005
+      : clamp(effectParams.depth ?? 0.4, 0, 1) * 0.004
+
+    delay.delayTime.value = baseDelay
+    lfo.type = getLfoWaveform(effectParams.type ?? 0)
+    lfo.frequency.value = clamp(effectParams.rate ?? 1.2, 0.1, 20)
+    lfoGain.gain.value = depth
+
+    effectInput.connect(delay)
+    delay.connect(wetGain)
+    wetGain.connect(masterGain)
+    lfo.connect(lfoGain)
+    lfoGain.connect(delay.delayTime)
+    startSource(lfo)
+    cleanupNodes.push(delay, lfoGain, lfo)
+    runtimeRefs.delay = delay
+    runtimeRefs.lfo = lfo
+    runtimeRefs.lfoGain = lfoGain
+  } else if (effectId === 'flanger') {
+    const delay = context.createDelay(0.03)
+    const feedbackGain = context.createGain()
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+
+    delay.delayTime.value = 0.0025
+    feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.3, 0, 0.95)
+    lfo.type = 'sine'
+    lfo.frequency.value = clamp(effectParams.rate ?? 0.5, 0.1, 5)
+    lfoGain.gain.value = clamp((effectParams.depth ?? 50) / 100, 0, 1) * 0.0045
+
+    effectInput.connect(delay)
+    delay.connect(feedbackGain)
+    feedbackGain.connect(delay)
+    delay.connect(wetGain)
+    wetGain.connect(masterGain)
+    lfo.connect(lfoGain)
+    lfoGain.connect(delay.delayTime)
+    startSource(lfo)
+    cleanupNodes.push(delay, feedbackGain, lfoGain, lfo)
+    runtimeRefs.delay = delay
+    runtimeRefs.feedbackGain = feedbackGain
+    runtimeRefs.lfo = lfo
+    runtimeRefs.lfoGain = lfoGain
+  } else if (effectId === 'phaser') {
+    const stages = Array.from({ length: 4 }, () => context.createBiquadFilter())
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+    const feedbackGain = context.createGain()
+
+    for (const stage of stages) {
+      stage.type = 'allpass'
+      stage.Q.value = 0.7
+      stage.frequency.value = 800
+    }
+
+    lfo.type = 'sine'
+    lfo.frequency.value = clamp(effectParams.rate ?? 1, 0.1, 5)
+    lfoGain.gain.value = 1200 * clamp(effectParams.depth ?? 0.4, 0, 1)
+    feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.7, 0, 0.9)
+
+    effectInput.connect(stages[0])
+    stages[0].connect(stages[1])
+    stages[1].connect(stages[2])
+    stages[2].connect(stages[3])
+    stages[3].connect(feedbackGain)
+    feedbackGain.connect(stages[0])
+    finishWetChain(stages[3])
+    lfo.connect(lfoGain)
+    for (const stage of stages) {
+      lfoGain.connect(stage.frequency)
+    }
+    startSource(lfo)
+    cleanupNodes.push(...stages, feedbackGain, lfoGain, lfo)
+    runtimeRefs.stages = stages
+    runtimeRefs.feedbackGain = feedbackGain
+    runtimeRefs.lfo = lfo
+    runtimeRefs.lfoGain = lfoGain
+  } else if (effectId === 'combfilter') {
+    const delay = context.createDelay(0.1)
+    const feedbackGain = context.createGain()
+    const feedforwardGain = context.createGain()
+    delay.delayTime.value = clamp(effectParams.delayTime ?? 0.01, 0.001, 0.05)
+    feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.95, 0, 0.98)
+    feedforwardGain.gain.value = clamp(effectParams.feedforward ?? 0.5, 0, 1)
+
+    effectInput.connect(delay)
+    delay.connect(feedbackGain)
+    feedbackGain.connect(delay)
+    effectInput.connect(feedforwardGain)
+    feedforwardGain.connect(wetGain)
+    delay.connect(wetGain)
+    wetGain.connect(masterGain)
+    cleanupNodes.push(delay, feedbackGain, feedforwardGain)
+    runtimeRefs.delay = delay
+    runtimeRefs.feedbackGain = feedbackGain
+    runtimeRefs.feedforwardGain = feedforwardGain
+  } else if (effectId === 'ringmodulator') {
+    const carrier = context.createOscillator()
+    const carrierGain = context.createGain()
+    const ringGain = context.createGain()
+
+    carrier.type = getLfoWaveform(effectParams.waveform ?? 0)
+    carrier.frequency.value = clamp(effectParams.carrierFreq ?? 200, 10, 2000)
+    carrierGain.gain.value = clamp((effectParams.mix ?? 50) / 100, 0, 1)
+    ringGain.gain.value = 0
+
+    effectInput.connect(ringGain)
+    ringGain.connect(wetGain)
+    wetGain.connect(masterGain)
+    carrier.connect(carrierGain)
+    carrierGain.connect(ringGain.gain)
+    startSource(carrier)
+    cleanupNodes.push(ringGain, carrierGain, carrier)
+    runtimeRefs.carrier = carrier
+    runtimeRefs.carrierGain = carrierGain
+    runtimeRefs.ringGain = ringGain
+  } else if (effectId === 'tremolo' || effectId === 'sidechainpump' || effectId === 'loopchop') {
+    const modGain = context.createGain()
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+    const offset = context.createConstantSource()
+    const depth = effectId === 'loopchop'
+      ? clamp(effectParams.wet ?? 0.8, 0, 1)
+      : clamp(effectParams.depth ?? 0.8, 0, 1)
+    const rate = effectId === 'tremolo'
+      ? clamp(effectParams.rate ?? 6, 0.1, 20)
+      : effectId === 'sidechainpump'
+        ? clamp(0.75 + (effectParams.sensitivity ?? 0.1) * 12, 0.5, 8)
+        : getLoopChopRate(effectParams.loopSize ?? 2, effectParams.stutterRate ?? 4)
+
+    modGain.gain.value = 1 - depth / 2
+    lfo.type = effectId === 'loopchop' ? 'square' : effectId === 'sidechainpump' ? 'sawtooth' : 'sine'
+    lfo.frequency.value = rate
+    lfoGain.gain.value = depth / 2
+    offset.offset.value = 1 - depth / 2
+
+    effectInput.connect(modGain)
+    modGain.connect(wetGain)
+    wetGain.connect(masterGain)
+    offset.connect(modGain.gain)
+    lfo.connect(lfoGain)
+    lfoGain.connect(modGain.gain)
+    startSource(offset)
+    startSource(lfo)
+    cleanupNodes.push(modGain, lfoGain, offset, lfo)
+    runtimeRefs.modGain = modGain
+    runtimeRefs.offset = offset
+    runtimeRefs.lfo = lfo
+    runtimeRefs.lfoGain = lfoGain
+  } else if (effectId === 'tapestop') {
+    const delay = context.createDelay(0.2)
+    const lowpass = context.createBiquadFilter()
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+    const modeRate = [0.12, 0.2, 0.35][Math.max(0, Math.min(2, Math.round(effectParams.mode ?? 2)))] ?? 0.35
+
+    delay.delayTime.value = 0.02 + clamp(effectParams.stopTime ?? 1, 0.1, 3) * 0.015
+    lowpass.type = 'lowpass'
+    lowpass.frequency.value = 1800 + clamp(effectParams.restartTime ?? 0.5, 0.1, 3) * 1800
+    lfo.type = 'sawtooth'
+    lfo.frequency.value = modeRate
+    lfoGain.gain.value = 0.03
+
+    effectInput.connect(delay)
+    delay.connect(lowpass)
+    finishWetChain(lowpass)
+    lfo.connect(lfoGain)
+    lfoGain.connect(delay.delayTime)
+    startSource(lfo)
+    cleanupNodes.push(delay, lowpass, lfoGain, lfo)
+    runtimeRefs.delay = delay
+    runtimeRefs.lowpass = lowpass
+    runtimeRefs.lfo = lfo
+    runtimeRefs.lfoGain = lfoGain
+  } else if (effectId === 'lofitape') {
+    const shaper = context.createWaveShaper()
+    const tone = context.createBiquadFilter()
+    const wobble = context.createDelay(0.05)
+    const lfo = context.createOscillator()
+    const lfoGain = context.createGain()
+    const noise = context.createScriptProcessor(2048, 1, 2)
+    const noiseGain = context.createGain()
+
+    shaper.curve = buildDistortionCurve(clamp(effectParams.saturation ?? 0.4, 0, 1))
+    shaper.oversample = '2x'
+    tone.type = 'lowpass'
+    tone.frequency.value = clamp(effectParams.toneRolloff ?? 6000, 500, 12000)
+    wobble.delayTime.value = 0.01
+    lfo.type = 'sine'
+    lfo.frequency.value = clamp(effectParams.flutterRate ?? 6, 0.1, 20)
+    lfoGain.gain.value = clamp(effectParams.wowDepth ?? 0.3, 0, 1) * 0.008
+    noiseGain.gain.value = clamp(effectParams.noise ?? 0.1, 0, 1) * 0.05
+    noise.onaudioprocess = (event) => {
+      for (let channel = 0; channel < event.outputBuffer.numberOfChannels; channel += 1) {
+        const output = event.outputBuffer.getChannelData(channel)
+        for (let index = 0; index < output.length; index += 1) {
+          output[index] = (Math.random() * 2 - 1) * 0.5
+        }
+      }
+    }
+
+    effectInput.connect(shaper)
+    shaper.connect(tone)
+    tone.connect(wobble)
+    wobble.connect(wetGain)
+    noise.connect(noiseGain)
+    noiseGain.connect(wetGain)
+    wetGain.connect(masterGain)
+    lfo.connect(lfoGain)
+    lfoGain.connect(wobble.delayTime)
+    startSource(lfo)
+    cleanupNodes.push(shaper, tone, wobble, lfoGain, lfo, noise, noiseGain)
+    runtimeRefs.shaper = shaper
+    runtimeRefs.tone = tone
+    runtimeRefs.wobble = wobble
+    runtimeRefs.lfo = lfo
+    runtimeRefs.lfoGain = lfoGain
+    runtimeRefs.noiseGain = noiseGain
+  } else {
+    effectInput.connect(masterGain)
+  }
+
+  return {
+    runtime: { effectId, refs: runtimeRefs },
+    cleanup: () => {
+      for (const source of cleanupSources) {
+        try {
+          source.stop()
+        } catch {}
+      }
+
+      for (const node of cleanupNodes) {
+        try {
+          node.disconnect()
+        } catch {}
+      }
+    },
+  }
 }
 
 const preferredRecordingMimeTypes = [
@@ -515,6 +1124,68 @@ const normalizeChopRegions = (regions: ChopRegion[], durationSeconds: number): C
   return normalized
 }
 
+const formatChopRegionLabel = (regionId: string) => {
+  const match = regionId.match(/(\d+)$/)
+  if (!match) {
+    return regionId
+  }
+
+  return `Chop ${match[1].padStart(2, '0')}`
+}
+
+const createDefaultMidiPadMappings = (): MidiPadNoteMappings =>
+  Object.fromEntries(padSlotIds.map((padId, index) => [padId, defaultMidiBaseNote + index])) as MidiPadNoteMappings
+
+const readStoredMidiPadMappings = (): MidiPadNoteMappings => {
+  const fallback = createDefaultMidiPadMappings()
+  if (typeof window === 'undefined') {
+    return fallback
+  }
+
+  try {
+    const stored = window.localStorage.getItem(midiStorageKey)
+    if (!stored) {
+      return fallback
+    }
+
+    const parsed = JSON.parse(stored) as Record<string, unknown>
+    return padSlotIds.reduce<MidiPadNoteMappings>((result, padId) => {
+      const value = parsed[padId]
+      result[padId] = value === null
+        ? null
+        : typeof value === 'number' && Number.isFinite(value)
+          ? Math.max(0, Math.min(127, Math.round(value)))
+          : fallback[padId]
+      return result
+    }, { ...fallback })
+  } catch {
+    return fallback
+  }
+}
+
+const readStoredMidiInputId = () => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    return window.localStorage.getItem(midiSelectedInputStorageKey)
+  } catch {
+    return null
+  }
+}
+
+const formatMidiNoteLabel = (noteNumber: number | null | undefined) => {
+  if (typeof noteNumber !== 'number' || !Number.isFinite(noteNumber)) {
+    return 'Unmapped'
+  }
+
+  const normalized = Math.max(0, Math.min(127, Math.round(noteNumber)))
+  const octave = Math.floor(normalized / 12) - 1
+  const noteName = chromaticNoteNames[normalized % chromaticNoteNames.length] ?? 'C'
+  return `${noteName}${octave}`
+}
+
 function App() {
   const [currentBankId, setCurrentBankId] = useState<BankId>('A')
   const [bankStates, setBankStates] = useState<Record<BankId, BankState>>(() => createInitialBanksState())
@@ -528,7 +1199,7 @@ function App() {
   const [promptText, setPromptText] = useState(promptPresets[0])
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle')
   const [generationMode, setGenerationMode] = useState<GenerationMode>('kit')
-  const [generationMessage, setGenerationMessage] = useState('Generate a full 16-pad bank, a single pad, or a loop for chopping.')
+  const [generationMessage, setGenerationMessage] = useState('Generate a full 16-pad bank or a loop for chopping.')
   const [micCaptureState, setMicCaptureState] = useState<MicCaptureState>('idle')
   const [micCaptureMessage, setMicCaptureMessage] = useState('Capture a raw take from your microphone, then load it into a pad or the editor.')
   const [recordedTake, setRecordedTake] = useState<RecordedTake | null>(null)
@@ -546,19 +1217,31 @@ function App() {
   const [editorPlayheadFraction, setEditorPlayheadFraction] = useState<number | null>(null)
   const [editorTransformPrompt, setEditorTransformPrompt] = useState('')
   const [isExportingSample, setIsExportingSample] = useState(false)
+  const [isExportingSequence, setIsExportingSequence] = useState(false)
+  const [sequenceExportMessage, setSequenceExportMessage] = useState('Render all audible banks as a WAV clip with the current FX chain.')
   const [isTransformingEditorAudio, setIsTransformingEditorAudio] = useState(false)
   const [isLoopPlaying, setIsLoopPlaying] = useState(false)
   const [isNormalizingLoop, setIsNormalizingLoop] = useState(false)
-  const [loopDecodeStatus, setLoopDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
-  const [selectedPadDecodeStatus, setSelectedPadDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [, setLoopDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [, setSelectedPadDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [sequenceTempo, setSequenceTempo] = useState(94)
   const [isMetronomeEnabled, setIsMetronomeEnabled] = useState(false)
+  const [isChromaticModeActive, setIsChromaticModeActive] = useState(false)
+  const [chromaticOctave, setChromaticOctave] = useState(chromaticBaseOctave)
+  const [activeChromaticNoteIds, setActiveChromaticNoteIds] = useState<string[]>([])
   const [isRecordArmed, setIsRecordArmed] = useState(false)
   const [isSequencePlaying, setIsSequencePlaying] = useState(false)
   const [sequencePlayheadStep, setSequencePlayheadStep] = useState<number | null>(null)
   const [selectedEffectId, setSelectedEffectId] = useState('simplefilter')
   const [effectParams, setEffectParams] = useState<Record<string, number>>(() => getEffectDefaults('simplefilter'))
   const [effectEnabled, setEffectEnabled] = useState(false)
+  const [midiAccessState, setMidiAccessState] = useState<'idle' | 'connecting' | 'ready' | 'error'>('idle')
+  const [midiStatusMessage, setMidiStatusMessage] = useState('Enable MIDI to map controller notes to the pad grid.')
+  const [availableMidiInputs, setAvailableMidiInputs] = useState<Array<{ id: string; name: string }>>([])
+  const [selectedMidiInputId, setSelectedMidiInputId] = useState<string | null>(() => readStoredMidiInputId())
+  const [midiLearnPadId, setMidiLearnPadId] = useState<string | null>(null)
+  const [midiPadNoteMappings, setMidiPadNoteMappings] = useState<MidiPadNoteMappings>(() => readStoredMidiPadMappings())
+  const [isMidiPanelOpen, setIsMidiPanelOpen] = useState(false)
 
   const audioContextRef = useRef<AudioContext | null>(null)
   const effectInputRef = useRef<GainNode | null>(null)
@@ -569,9 +1252,11 @@ function App() {
   const reversedBufferMapRef = useRef<Map<string, AudioBuffer>>(new Map())
   const loadPromiseRef = useRef<Promise<void> | null>(null)
   const activePadSourcesRef = useRef<Map<string, ActivePadAudio>>(new Map())
+  const activeChromaticNotesRef = useRef<Map<string, ActiveChromaticNoteAudio>>(new Map())
+  const pressedChromaticKeysRef = useRef<Map<string, string>>(new Map())
   const activeEffectRuntimeRef = useRef<ActiveEffectRuntime | null>(null)
-  const loopAudioRef = useRef<HTMLAudioElement | null>(null)
-  const loopStopTimeoutRef = useRef<number | null>(null)
+  const activeLoopPlaybackRef = useRef<ActiveLoopPlayback | null>(null)
+  const loopPlaybackIdRef = useRef(0)
   const playheadFrameRef = useRef<number | null>(null)
   const activePadPlayheadIdRef = useRef<string | null>(null)
   const preservedLoopChopRegionsRef = useRef<ChopRegion[] | null>(null)
@@ -584,6 +1269,7 @@ function App() {
   const ephemeralAudioUrlsRef = useRef<Set<string>>(new Set())
   const scheduledMetronomeSourcesRef = useRef<Set<OscillatorNode>>(new Set())
   const sequenceSchedulerRef = useRef<number | null>(null)
+  const sequenceStartTimeRef = useRef(0)
   const sequenceNextStepTimeRef = useRef(0)
   const sequenceStepIndexRef = useRef(0)
   const sequenceUiTimeoutsRef = useRef<number[]>([])
@@ -591,6 +1277,11 @@ function App() {
   const currentBankIdRef = useRef(currentBankId)
   const sequenceTempoRef = useRef(sequenceTempo)
   const previousEffectParamsRef = useRef(effectParams)
+  const midiAccessRef = useRef<MIDIAccess | null>(null)
+  const selectedMidiInputIdRef = useRef<string | null>(selectedMidiInputId)
+  const midiLearnPadIdRef = useRef<string | null>(midiLearnPadId)
+  const midiPadNoteMappingsRef = useRef<MidiPadNoteMappings>(midiPadNoteMappings)
+  const activeMidiNotesRef = useRef<Map<string, { padId: string; bankId: BankId }>>(new Map())
 
   const allPads = useMemo(() => Object.values(bankStates).flatMap((bank) => bank.pads), [bankStates])
 
@@ -598,6 +1289,7 @@ function App() {
   const currentBankPads = currentBankState.pads
   const currentSequenceLength = currentBankState.sequenceLength
   const currentStepPattern = currentBankState.stepPattern
+  const currentStepSemitoneOffsets = currentBankState.stepSemitoneOffsets
   const currentSequenceMuted = currentBankState.sequenceMuted
   const selectedPad = useMemo(
     () => currentBankPads.find((pad) => pad.id === currentBankState.selectedPadId) ?? currentBankPads[0],
@@ -613,14 +1305,24 @@ function App() {
   const currentEditorAudioUrl = editorSource === 'loop' && generatedLoop ? generatedLoop.sampleUrl : selectedPad.sampleUrl
   const currentEditorAudioDuration = editorSource === 'loop' && generatedLoop ? getLoopDurationSeconds(generatedLoop) : null
   const currentEditorSampleName = editorSource === 'loop' && generatedLoop ? generatedLoop.sampleName : selectedPad.sampleName
-  const activeWaveformStatus = editorSource === 'loop' && generatedLoop ? loopDecodeStatus : selectedPadDecodeStatus
   const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
   const editorExportLabel = isLoopEditorActive ? 'Export Loop' : 'Export Sample'
   const selectedChop = selectedChopId ? loopChopRegions.find((region) => region.id === selectedChopId) ?? null : null
+  const selectedChopDurationSeconds = selectedChop ? Math.max(0.01, selectedChop.end - selectedChop.start) : null
+  const activeChromaticNoteSet = useMemo(() => new Set(activeChromaticNoteIds), [activeChromaticNoteIds])
+  const chromaticRangeLabel = `${getChromaticNoteLabel(chromaticOctave, 0)}-${getChromaticNoteLabel(chromaticOctave, 12)}`
   const effectsList = useMemo(() => getEffectsList(), [])
   const currentEffectConfig = getEffectConfig(selectedEffectId)
   const isCurrentEffectSupported = supportedGlobalEffectIds.has(selectedEffectId)
   const micRecordingSupported = typeof MediaRecorder !== 'undefined' && typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
+  const midiSupported = typeof navigator !== 'undefined' && typeof (navigator as NavigatorWithMidi).requestMIDIAccess === 'function'
+  const isMidiEnabled = midiAccessState === 'ready'
+  const midiLearningPad = midiLearnPadId ? currentBankPads.find((pad) => pad.id === midiLearnPadId) ?? null : null
+  const midiPanelMessage = !midiSupported
+    ? 'Web MIDI is unavailable here. Use Chrome or another Chromium browser on localhost or https.'
+    : midiLearningPad
+      ? `Press a MIDI note now to map ${midiLearningPad.label}.`
+      : midiStatusMessage
   const micCaptureClockLabel = micCaptureState === 'recording'
     ? formatClockDuration(recordingElapsedMs / 1000)
     : recordedTake
@@ -696,6 +1398,73 @@ function App() {
   }, [sequenceTempo])
 
   useEffect(() => {
+    selectedMidiInputIdRef.current = selectedMidiInputId
+  }, [selectedMidiInputId])
+
+  useEffect(() => {
+    midiLearnPadIdRef.current = midiLearnPadId
+  }, [midiLearnPadId])
+
+  useEffect(() => {
+    midiPadNoteMappingsRef.current = midiPadNoteMappings
+  }, [midiPadNoteMappings])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    try {
+      window.localStorage.setItem(midiStorageKey, JSON.stringify(midiPadNoteMappings))
+    } catch {}
+  }, [midiPadNoteMappings])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    try {
+      if (selectedMidiInputId) {
+        window.localStorage.setItem(midiSelectedInputStorageKey, selectedMidiInputId)
+      } else {
+        window.localStorage.removeItem(midiSelectedInputStorageKey)
+      }
+    } catch {}
+  }, [selectedMidiInputId])
+
+  useEffect(() => {
+    const access = midiAccessRef.current
+    if (!access || !selectedMidiInputId) {
+      return
+    }
+
+    if (!Array.from(access.inputs.values()).some((input) => input.id === selectedMidiInputId)) {
+      return
+    }
+
+    const listener = (event: MIDIMessageEvent) => {
+      handleMidiMessage(event)
+    }
+
+    for (const input of access.inputs.values()) {
+      input.onmidimessage = input.id === selectedMidiInputId ? listener : null
+    }
+
+    return () => {
+      for (const input of access.inputs.values()) {
+        if (input.onmidimessage === listener) {
+          input.onmidimessage = null
+        }
+      }
+    }
+  }, [availableMidiInputs, selectedMidiInputId])
+
+  useEffect(() => {
+    releaseAllMappedMidiNotes()
+  }, [selectedMidiInputId])
+
+  useEffect(() => {
     return () => {
       if (effectCleanupRef.current) {
         effectCleanupRef.current()
@@ -711,10 +1480,6 @@ function App() {
 
       if (audioContextRef.current) {
         void audioContextRef.current.close()
-      }
-
-      if (loopStopTimeoutRef.current) {
-        window.clearTimeout(loopStopTimeoutRef.current)
       }
 
       if (playheadFrameRef.current) {
@@ -747,6 +1512,14 @@ function App() {
       }
       ephemeralAudioUrlsRef.current.clear()
 
+      if (midiAccessRef.current) {
+        midiAccessRef.current.onstatechange = null
+        for (const input of midiAccessRef.current.inputs.values()) {
+          input.onmidimessage = null
+        }
+      }
+      activeMidiNotesRef.current.clear()
+
       for (const activePad of activePadSourcesRef.current.values()) {
         try {
           activePad.source.stop()
@@ -754,9 +1527,27 @@ function App() {
       }
       activePadSourcesRef.current.clear()
 
-      if (loopAudioRef.current) {
-        loopAudioRef.current.pause()
-        loopAudioRef.current = null
+      for (const activeNote of activeChromaticNotesRef.current.values()) {
+        try {
+          activeNote.source.stop()
+        } catch {}
+      }
+      activeChromaticNotesRef.current.clear()
+      pressedChromaticKeysRef.current.clear()
+
+      const activeLoopPlayback = activeLoopPlaybackRef.current
+      if (activeLoopPlayback) {
+        activeLoopPlayback.source.onended = null
+        try {
+          activeLoopPlayback.source.stop()
+        } catch {}
+        try {
+          activeLoopPlayback.source.disconnect()
+        } catch {}
+        try {
+          activeLoopPlayback.gainNode.disconnect()
+        } catch {}
+        activeLoopPlaybackRef.current = null
       }
     }
   }, [])
@@ -808,14 +1599,43 @@ function App() {
       return
     }
 
-    const audio = ensureLoopAudio()
-    if (!audio) {
-      return
+    let cancelled = false
+
+    const primeLoopBuffer = async () => {
+      try {
+        const buffer = await loadAudioBuffer(generatedLoop.sampleUrl, generatedLoop.sampleFile)
+        if (cancelled) {
+          return
+        }
+
+        const actualDuration = Number(buffer.duration.toFixed(4))
+        if (Math.abs(actualDuration - getLoopDurationSeconds(generatedLoop)) <= 0.02) {
+          return
+        }
+
+        preservedLoopChopRegionsRef.current = loopChopRegions.length > 0 ? loopChopRegions : preservedLoopChopRegionsRef.current
+        preservedSelectedChopIdRef.current = selectedChopId
+        setGeneratedLoop((current) => {
+          if (!current || current.sampleUrl !== generatedLoop.sampleUrl) {
+            return current
+          }
+
+          return {
+            ...current,
+            durationSeconds: actualDuration,
+          }
+        })
+      } catch (error) {
+        console.warn('Failed to prime loop buffer.', error)
+      }
     }
 
-    audio.preload = 'auto'
-    audio.load()
-  }, [generatedLoop?.sampleUrl])
+    void primeLoopBuffer()
+
+    return () => {
+      cancelled = true
+    }
+  }, [generatedLoop?.sampleUrl, generatedLoop?.sampleFile, loopChopRegions, selectedChopId])
 
   useEffect(() => {
     setSelectedPadDecodeStatus('idle')
@@ -936,10 +1756,25 @@ function App() {
     activeEffectRuntimeRef.current = null
 
     try {
-      effectInput.disconnect()
-    } catch {}
+      const routing = createGlobalEffectRouting({
+        context,
+        effectInput,
+        masterGain,
+        effectId: selectedEffectId,
+        effectEnabled,
+        isEffectSupported: isCurrentEffectSupported,
+        effectParams,
+      })
 
-    if (!effectEnabled || !isCurrentEffectSupported) {
+      effectCleanupRef.current = routing.cleanup
+      activeEffectRuntimeRef.current = routing.runtime
+    } catch (error) {
+      console.error('Failed to rebuild effect chain.', error)
+
+      try {
+        effectInput.disconnect()
+      } catch {}
+
       effectInput.connect(masterGain)
       effectCleanupRef.current = () => {
         try {
@@ -947,450 +1782,6 @@ function App() {
         } catch {}
       }
       activeEffectRuntimeRef.current = null
-      return
-    }
-
-    const dryGain = context.createGain()
-    const wetGain = context.createGain()
-    const wet = clamp(effectParams.wet ?? 0.5, 0, 1)
-    dryGain.gain.value = 1 - wet
-    wetGain.gain.value = wet
-
-    effectInput.connect(dryGain)
-    dryGain.connect(masterGain)
-
-    const cleanupNodes: AudioNode[] = [effectInput, dryGain, wetGain]
-    const cleanupSources: AudioScheduledSourceNode[] = []
-    const runtimeRefs: Record<string, unknown> = { dryGain, wetGain }
-
-    const startSource = (source: AudioScheduledSourceNode) => {
-      source.start()
-      cleanupSources.push(source)
-    }
-
-    const finishWetChain = (node: AudioNode) => {
-      node.connect(wetGain)
-      wetGain.connect(masterGain)
-    }
-
-    if (selectedEffectId === 'simplefilter') {
-      const filter = context.createBiquadFilter()
-      const filterType = ['lowpass', 'highpass', 'bandpass'][Math.max(0, Math.min(2, Math.round(effectParams.filterType ?? 0)))] as BiquadFilterType
-
-      filter.type = filterType
-      filter.frequency.value = clamp(effectParams.cutoffFreq ?? 2000, 20, 20000)
-      filter.Q.value = clamp(effectParams.resonance ?? 5, 0.0001, 30)
-
-      effectInput.connect(filter)
-      finishWetChain(filter)
-      cleanupNodes.push(filter)
-      runtimeRefs.filter = filter
-    } else if (selectedEffectId === 'autofilter') {
-      const filter = context.createBiquadFilter()
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-      const baseFreq = clamp(effectParams.baseFreq ?? 990, 20, 12000)
-      const depth = clamp(effectParams.depth ?? 0.8, 0, 1)
-      const octaves = clamp(effectParams.octaves ?? 1, 1, 6)
-
-      filter.type = 'lowpass'
-      filter.Q.value = 6
-      filter.frequency.value = baseFreq
-      lfo.type = 'sine'
-      lfo.frequency.value = clamp(effectParams.rate ?? 5, 0.1, 10)
-      lfoGain.gain.value = baseFreq * (Math.pow(2, octaves) - 1) * depth
-
-      effectInput.connect(filter)
-      finishWetChain(filter)
-      lfo.connect(lfoGain)
-      lfoGain.connect(filter.frequency)
-      startSource(lfo)
-      cleanupNodes.push(filter, lfoGain, lfo)
-      runtimeRefs.filter = filter
-      runtimeRefs.lfo = lfo
-      runtimeRefs.lfoGain = lfoGain
-    } else if (selectedEffectId === 'autopanner') {
-      const panner = typeof context.createStereoPanner === 'function' ? context.createStereoPanner() : null
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-
-      if (panner) {
-        lfo.type = getLfoWaveform(effectParams.type ?? 0)
-        lfo.frequency.value = clamp(effectParams.rate ?? 2, 0.1, 10)
-        lfoGain.gain.value = clamp(effectParams.depth ?? 0.8, 0, 1)
-        effectInput.connect(panner)
-        finishWetChain(panner)
-        lfo.connect(lfoGain)
-        lfoGain.connect(panner.pan)
-        startSource(lfo)
-        cleanupNodes.push(panner, lfoGain, lfo)
-        runtimeRefs.panner = panner
-        runtimeRefs.lfo = lfo
-        runtimeRefs.lfoGain = lfoGain
-      } else {
-        effectInput.connect(masterGain)
-      }
-    } else if (selectedEffectId === 'delay') {
-      const delay = context.createDelay(2)
-      const feedbackGain = context.createGain()
-
-      delay.delayTime.value = clamp(effectParams.delayTime ?? 0.2, 0.01, 2)
-      feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.5, 0, 0.95)
-
-      effectInput.connect(delay)
-      delay.connect(feedbackGain)
-      feedbackGain.connect(delay)
-      finishWetChain(delay)
-      cleanupNodes.push(delay, feedbackGain)
-      runtimeRefs.delay = delay
-      runtimeRefs.feedbackGain = feedbackGain
-    } else if (selectedEffectId === 'taptempodelay') {
-      const delay = context.createDelay(2)
-      const feedbackGain = context.createGain()
-      const delaySeconds = getSubdivisionSeconds(effectParams.tapTempo ?? 120, effectParams.subdivision ?? 1)
-
-      delay.delayTime.value = clamp(delaySeconds, 0.01, 2)
-      feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.4, 0, 0.95)
-
-      effectInput.connect(delay)
-      delay.connect(feedbackGain)
-      feedbackGain.connect(delay)
-      finishWetChain(delay)
-      cleanupNodes.push(delay, feedbackGain)
-      runtimeRefs.delay = delay
-      runtimeRefs.feedbackGain = feedbackGain
-    } else if (selectedEffectId === 'distortion') {
-      const shaper = context.createWaveShaper()
-      const toneFilter = context.createBiquadFilter()
-      const amount = clamp(effectParams.amount ?? 0.5, 0, 1)
-      const tone = clamp(effectParams.tone ?? 0.5, 0, 1)
-
-      shaper.curve = buildDistortionCurve(amount)
-      shaper.oversample = '4x'
-      toneFilter.type = 'lowpass'
-      toneFilter.frequency.value = 700 + tone * 7300
-
-      effectInput.connect(shaper)
-      shaper.connect(toneFilter)
-      finishWetChain(toneFilter)
-      cleanupNodes.push(shaper, toneFilter)
-      runtimeRefs.shaper = shaper
-      runtimeRefs.toneFilter = toneFilter
-    } else if (selectedEffectId === 'bitcrusher') {
-      const crusher = createBitcrusherNode(context, effectParams.bits ?? 8, effectParams.normalRange ?? 0.4)
-
-      effectInput.connect(crusher)
-      finishWetChain(crusher)
-      cleanupNodes.push(crusher)
-      runtimeRefs.crusher = crusher
-    } else if (selectedEffectId === 'reverb') {
-      const convolver = context.createConvolver()
-      convolver.buffer = buildImpulseResponse(context, clamp(effectParams.roomSize ?? 0.7, 0, 1), clamp(effectParams.decay ?? 2, 0.2, 10))
-
-      effectInput.connect(convolver)
-      finishWetChain(convolver)
-      cleanupNodes.push(convolver)
-      runtimeRefs.convolver = convolver
-    } else if (selectedEffectId === 'hallreverb') {
-      const preDelay = context.createDelay(1)
-      const convolver = context.createConvolver()
-      const damping = context.createBiquadFilter()
-
-      preDelay.delayTime.value = clamp(effectParams.preDelay ?? 0.03, 0, 1)
-      convolver.buffer = buildImpulseResponse(context, clamp(effectParams.roomSize ?? 0.8, 0, 1), clamp(effectParams.decay ?? 4, 0.2, 10))
-      damping.type = 'lowpass'
-      damping.frequency.value = clamp(effectParams.damping ?? 6000, 500, 12000)
-
-      effectInput.connect(preDelay)
-      preDelay.connect(convolver)
-      convolver.connect(damping)
-      finishWetChain(damping)
-      cleanupNodes.push(preDelay, convolver, damping)
-      runtimeRefs.preDelay = preDelay
-      runtimeRefs.convolver = convolver
-      runtimeRefs.damping = damping
-    } else if (selectedEffectId === 'compressor') {
-      const compressor = context.createDynamicsCompressor()
-      compressor.threshold.value = clamp(effectParams.threshold ?? -24, -60, 0)
-      compressor.ratio.value = clamp(effectParams.ratio ?? 4, 1, 20)
-      compressor.attack.value = clamp(effectParams.attack ?? 0.003, 0, 1)
-      compressor.knee.value = 24
-      compressor.release.value = 0.2
-
-      effectInput.connect(compressor)
-      finishWetChain(compressor)
-      cleanupNodes.push(compressor)
-      runtimeRefs.compressor = compressor
-    } else if (selectedEffectId === 'djeq') {
-      const low = context.createBiquadFilter()
-      const mid = context.createBiquadFilter()
-      const high = context.createBiquadFilter()
-
-      low.type = 'lowshelf'
-      low.frequency.value = 120
-      low.gain.value = clamp(effectParams.lowGain ?? 0, -15, 15)
-      mid.type = 'peaking'
-      mid.frequency.value = 1100
-      mid.Q.value = 1
-      mid.gain.value = clamp(effectParams.midGain ?? 0, -15, 15)
-      high.type = 'highshelf'
-      high.frequency.value = 4500
-      high.gain.value = clamp(effectParams.highGain ?? 0, -15, 15)
-
-      effectInput.connect(low)
-      low.connect(mid)
-      mid.connect(high)
-      finishWetChain(high)
-      cleanupNodes.push(low, mid, high)
-      runtimeRefs.low = low
-      runtimeRefs.mid = mid
-      runtimeRefs.high = high
-    } else if (selectedEffectId === 'chorus' || selectedEffectId === 'vibrato' || selectedEffectId === 'pitchshifter') {
-      const delay = context.createDelay(0.1)
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-      const baseDelay = selectedEffectId === 'pitchshifter'
-        ? 0.02 + clamp(Math.abs(effectParams.pitch ?? 0), 0, 12) * 0.0012
-        : selectedEffectId === 'vibrato'
-          ? 0.008
-          : clamp((effectParams.delay ?? 5) / 1000, 0.002, 0.03)
-      const depth = selectedEffectId === 'pitchshifter'
-        ? 0.001 + clamp(Math.abs(effectParams.pitch ?? 0), 0, 12) * 0.0005
-        : clamp(effectParams.depth ?? 0.4, 0, 1) * 0.004
-
-      delay.delayTime.value = baseDelay
-      lfo.type = getLfoWaveform(effectParams.type ?? 0)
-      lfo.frequency.value = clamp(effectParams.rate ?? 1.2, 0.1, 20)
-      lfoGain.gain.value = depth
-
-      effectInput.connect(delay)
-      delay.connect(wetGain)
-      wetGain.connect(masterGain)
-      lfo.connect(lfoGain)
-      lfoGain.connect(delay.delayTime)
-      startSource(lfo)
-      cleanupNodes.push(delay, lfoGain, lfo)
-      runtimeRefs.delay = delay
-      runtimeRefs.lfo = lfo
-      runtimeRefs.lfoGain = lfoGain
-    } else if (selectedEffectId === 'flanger') {
-      const delay = context.createDelay(0.03)
-      const feedbackGain = context.createGain()
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-
-      delay.delayTime.value = 0.0025
-      feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.3, 0, 0.95)
-      lfo.type = 'sine'
-      lfo.frequency.value = clamp(effectParams.rate ?? 0.5, 0.1, 5)
-      lfoGain.gain.value = clamp((effectParams.depth ?? 50) / 100, 0, 1) * 0.0045
-
-      effectInput.connect(delay)
-      delay.connect(feedbackGain)
-      feedbackGain.connect(delay)
-      delay.connect(wetGain)
-      wetGain.connect(masterGain)
-      lfo.connect(lfoGain)
-      lfoGain.connect(delay.delayTime)
-      startSource(lfo)
-      cleanupNodes.push(delay, feedbackGain, lfoGain, lfo)
-      runtimeRefs.delay = delay
-      runtimeRefs.feedbackGain = feedbackGain
-      runtimeRefs.lfo = lfo
-      runtimeRefs.lfoGain = lfoGain
-    } else if (selectedEffectId === 'phaser') {
-      const stages = Array.from({ length: 4 }, () => context.createBiquadFilter())
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-      const feedbackGain = context.createGain()
-
-      for (const stage of stages) {
-        stage.type = 'allpass'
-        stage.Q.value = 0.7
-        stage.frequency.value = 800
-      }
-
-      lfo.type = 'sine'
-      lfo.frequency.value = clamp(effectParams.rate ?? 1, 0.1, 5)
-      lfoGain.gain.value = 1200 * clamp(effectParams.depth ?? 0.4, 0, 1)
-      feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.7, 0, 0.9)
-
-      effectInput.connect(stages[0])
-      stages[0].connect(stages[1])
-      stages[1].connect(stages[2])
-      stages[2].connect(stages[3])
-      stages[3].connect(feedbackGain)
-      feedbackGain.connect(stages[0])
-      finishWetChain(stages[3])
-      lfo.connect(lfoGain)
-      for (const stage of stages) {
-        lfoGain.connect(stage.frequency)
-      }
-      startSource(lfo)
-      cleanupNodes.push(...stages, feedbackGain, lfoGain, lfo)
-      runtimeRefs.stages = stages
-      runtimeRefs.feedbackGain = feedbackGain
-      runtimeRefs.lfo = lfo
-      runtimeRefs.lfoGain = lfoGain
-    } else if (selectedEffectId === 'combfilter') {
-      const delay = context.createDelay(0.1)
-      const feedbackGain = context.createGain()
-      const feedforwardGain = context.createGain()
-      delay.delayTime.value = clamp(effectParams.delayTime ?? 0.01, 0.001, 0.05)
-      feedbackGain.gain.value = clamp(effectParams.feedback ?? 0.95, 0, 0.98)
-      feedforwardGain.gain.value = clamp(effectParams.feedforward ?? 0.5, 0, 1)
-
-      effectInput.connect(delay)
-      delay.connect(feedbackGain)
-      feedbackGain.connect(delay)
-      effectInput.connect(feedforwardGain)
-      feedforwardGain.connect(wetGain)
-      delay.connect(wetGain)
-      wetGain.connect(masterGain)
-      cleanupNodes.push(delay, feedbackGain, feedforwardGain)
-      runtimeRefs.delay = delay
-      runtimeRefs.feedbackGain = feedbackGain
-      runtimeRefs.feedforwardGain = feedforwardGain
-    } else if (selectedEffectId === 'ringmodulator') {
-      const carrier = context.createOscillator()
-      const carrierGain = context.createGain()
-      const ringGain = context.createGain()
-
-      carrier.type = getLfoWaveform(effectParams.waveform ?? 0)
-      carrier.frequency.value = clamp(effectParams.carrierFreq ?? 200, 10, 2000)
-      carrierGain.gain.value = clamp((effectParams.mix ?? 50) / 100, 0, 1)
-      ringGain.gain.value = 0
-
-      effectInput.connect(ringGain)
-      ringGain.connect(wetGain)
-      wetGain.connect(masterGain)
-      carrier.connect(carrierGain)
-      carrierGain.connect(ringGain.gain)
-      startSource(carrier)
-      cleanupNodes.push(ringGain, carrierGain, carrier)
-      runtimeRefs.carrier = carrier
-      runtimeRefs.carrierGain = carrierGain
-      runtimeRefs.ringGain = ringGain
-    } else if (selectedEffectId === 'tremolo' || selectedEffectId === 'sidechainpump' || selectedEffectId === 'loopchop') {
-      const modGain = context.createGain()
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-      const offset = context.createConstantSource()
-      const depth = selectedEffectId === 'loopchop'
-        ? clamp(effectParams.wet ?? 0.8, 0, 1)
-        : clamp(effectParams.depth ?? 0.8, 0, 1)
-      const rate = selectedEffectId === 'tremolo'
-        ? clamp(effectParams.rate ?? 6, 0.1, 20)
-        : selectedEffectId === 'sidechainpump'
-          ? clamp(0.75 + (effectParams.sensitivity ?? 0.1) * 12, 0.5, 8)
-          : getLoopChopRate(effectParams.loopSize ?? 2, effectParams.stutterRate ?? 4)
-
-      modGain.gain.value = 1 - depth / 2
-      lfo.type = selectedEffectId === 'loopchop' ? 'square' : selectedEffectId === 'sidechainpump' ? 'sawtooth' : 'sine'
-      lfo.frequency.value = rate
-      lfoGain.gain.value = depth / 2
-      offset.offset.value = 1 - depth / 2
-
-      effectInput.connect(modGain)
-      modGain.connect(wetGain)
-      wetGain.connect(masterGain)
-      offset.connect(modGain.gain)
-      lfo.connect(lfoGain)
-      lfoGain.connect(modGain.gain)
-      startSource(offset)
-      startSource(lfo)
-      cleanupNodes.push(modGain, lfoGain, offset, lfo)
-      runtimeRefs.modGain = modGain
-      runtimeRefs.offset = offset
-      runtimeRefs.lfo = lfo
-      runtimeRefs.lfoGain = lfoGain
-    } else if (selectedEffectId === 'tapestop') {
-      const delay = context.createDelay(0.2)
-      const lowpass = context.createBiquadFilter()
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-      const modeRate = [0.12, 0.2, 0.35][Math.max(0, Math.min(2, Math.round(effectParams.mode ?? 2)))] ?? 0.35
-
-      delay.delayTime.value = 0.02 + clamp(effectParams.stopTime ?? 1, 0.1, 3) * 0.015
-      lowpass.type = 'lowpass'
-      lowpass.frequency.value = 1800 + clamp(effectParams.restartTime ?? 0.5, 0.1, 3) * 1800
-      lfo.type = 'sawtooth'
-      lfo.frequency.value = modeRate
-      lfoGain.gain.value = 0.03
-
-      effectInput.connect(delay)
-      delay.connect(lowpass)
-      finishWetChain(lowpass)
-      lfo.connect(lfoGain)
-      lfoGain.connect(delay.delayTime)
-      startSource(lfo)
-      cleanupNodes.push(delay, lowpass, lfoGain, lfo)
-      runtimeRefs.delay = delay
-      runtimeRefs.lowpass = lowpass
-      runtimeRefs.lfo = lfo
-      runtimeRefs.lfoGain = lfoGain
-    } else if (selectedEffectId === 'lofitape') {
-      const shaper = context.createWaveShaper()
-      const tone = context.createBiquadFilter()
-      const wobble = context.createDelay(0.05)
-      const lfo = context.createOscillator()
-      const lfoGain = context.createGain()
-      const noise = context.createScriptProcessor(2048, 1, 2)
-      const noiseGain = context.createGain()
-
-      shaper.curve = buildDistortionCurve(clamp(effectParams.saturation ?? 0.4, 0, 1))
-      shaper.oversample = '2x'
-      tone.type = 'lowpass'
-      tone.frequency.value = clamp(effectParams.toneRolloff ?? 6000, 500, 12000)
-      wobble.delayTime.value = 0.01
-      lfo.type = 'sine'
-      lfo.frequency.value = clamp(effectParams.flutterRate ?? 6, 0.1, 20)
-      lfoGain.gain.value = clamp(effectParams.wowDepth ?? 0.3, 0, 1) * 0.008
-      noiseGain.gain.value = clamp(effectParams.noise ?? 0.1, 0, 1) * 0.05
-      noise.onaudioprocess = (event) => {
-        for (let channel = 0; channel < event.outputBuffer.numberOfChannels; channel += 1) {
-          const output = event.outputBuffer.getChannelData(channel)
-          for (let index = 0; index < output.length; index += 1) {
-            output[index] = (Math.random() * 2 - 1) * 0.5
-          }
-        }
-      }
-
-      effectInput.connect(shaper)
-      shaper.connect(tone)
-      tone.connect(wobble)
-      wobble.connect(wetGain)
-      noise.connect(noiseGain)
-      noiseGain.connect(wetGain)
-      wetGain.connect(masterGain)
-      lfo.connect(lfoGain)
-      lfoGain.connect(wobble.delayTime)
-      startSource(lfo)
-      cleanupNodes.push(shaper, tone, wobble, lfoGain, lfo, noise, noiseGain)
-      runtimeRefs.shaper = shaper
-      runtimeRefs.tone = tone
-      runtimeRefs.wobble = wobble
-      runtimeRefs.lfo = lfo
-      runtimeRefs.lfoGain = lfoGain
-      runtimeRefs.noiseGain = noiseGain
-    } else {
-      effectInput.connect(masterGain)
-    }
-
-    activeEffectRuntimeRef.current = { effectId: selectedEffectId, refs: runtimeRefs }
-
-    effectCleanupRef.current = () => {
-      for (const source of cleanupSources) {
-        try {
-          source.stop()
-        } catch {}
-      }
-
-      for (const node of cleanupNodes) {
-        try {
-          node.disconnect()
-        } catch {}
-      }
     }
   }
 
@@ -1777,8 +2168,8 @@ function App() {
     return audioContextRef.current
   }
 
-  const loadPadBuffer = async (pad: Pad) => {
-    const cachedBuffer = bufferMapRef.current.get(pad.sampleUrl)
+  const loadAudioBuffer = async (audioUrl: string, fileLabel: string) => {
+    const cachedBuffer = bufferMapRef.current.get(audioUrl)
     if (cachedBuffer) {
       return cachedBuffer
     }
@@ -1788,16 +2179,20 @@ function App() {
       await context.resume()
     }
 
-    const response = await fetch(pad.sampleUrl)
+    const response = await fetch(audioUrl)
     if (!response.ok) {
-      throw new Error('Failed to fetch sample: ' + pad.sampleFile)
+      throw new Error('Failed to fetch audio source: ' + fileLabel)
     }
 
     const audioData = await response.arrayBuffer()
     const buffer = await context.decodeAudioData(audioData.slice(0))
-    bufferMapRef.current.set(pad.sampleUrl, buffer)
+    bufferMapRef.current.set(audioUrl, buffer)
     setLoadedPadCount(bufferMapRef.current.size)
     return buffer
+  }
+
+  const loadPadBuffer = async (pad: Pad) => {
+    return loadAudioBuffer(pad.sampleUrl, pad.sampleFile)
   }
 
   const ensureAudioEngine = async () => {
@@ -1878,12 +2273,7 @@ function App() {
     await ensureAudioEngine()
 
     const sampleBuffer = await getPlaybackBuffer(selectedPad, selectedPadSettings.reversed)
-    const forwardStartTime = sampleBuffer.duration * selectedPadSettings.startFraction
-    const forwardEndTime = sampleBuffer.duration * selectedPadSettings.endFraction
-    const startTime = selectedPadSettings.reversed ? sampleBuffer.duration - forwardEndTime : forwardStartTime
-    const endTime = selectedPadSettings.reversed ? sampleBuffer.duration - forwardStartTime : forwardEndTime
-    const playbackDuration = Math.max(0.01, endTime - startTime)
-    const playbackRate = Math.pow(2, selectedPadSettings.semitoneOffset / 12)
+    const { startTime, playbackDuration, playbackRate } = getPadPlaybackWindow(sampleBuffer, selectedPadSettings)
     const renderedDurationSeconds = Math.max(0.01, playbackDuration / playbackRate)
     const outputChannels = Math.min(2, Math.max(sampleBuffer.numberOfChannels, Math.abs(selectedPadSettings.pan) > 0.001 ? 2 : 1))
     const frameCount = Math.max(1, Math.ceil(renderedDurationSeconds * sampleBuffer.sampleRate) + Math.ceil(sampleBuffer.sampleRate * 0.02))
@@ -1930,6 +2320,244 @@ function App() {
       console.error('Editor export failed.', error)
     } finally {
       setIsExportingSample(false)
+    }
+  }
+
+  const renderSequenceClipAsset = async () => {
+    const audibleBanks = bankIds.flatMap((bankId) => {
+      const bankState = bankStates[bankId]
+      const bankGain = getEffectiveBankGain(bankId, bankMixerGains, bankMixerMuted, bankMixerSoloed)
+
+      if (!bankState || bankGain <= 0.0001) {
+        return []
+      }
+
+      return [{ bankId, bankState, bankGain }]
+    })
+
+    if (audibleBanks.length === 0) {
+      throw new Error('Unmute at least one bank before exporting the sequence.')
+    }
+
+    const scheduledPads = audibleBanks.flatMap(({ bankId, bankState, bankGain }) => (
+      bankState.pads.flatMap((pad) => {
+        const steps = bankState.stepPattern[pad.id] ?? []
+        const stepSemitoneOffsets = bankState.stepSemitoneOffsets[pad.id] ?? []
+        const playbackSettings = bankState.playbackSettings[pad.id]
+
+        if (!playbackSettings || bankState.sequenceMuted[pad.id] || !steps.some(Boolean)) {
+          return []
+        }
+
+        return [{
+          bankId,
+          bankGain,
+          pad,
+          playbackSettings,
+          steps,
+          stepSemitoneOffsets,
+          sequenceLength: bankState.sequenceLength,
+        }]
+      })
+    ))
+
+    if (scheduledPads.length === 0) {
+      throw new Error('Program at least one audible step before exporting the sequence.')
+    }
+
+    await ensureAudioEngine()
+
+    const playbackBuffers = new Map<string, AudioBuffer>()
+
+    await Promise.all(scheduledPads.map(async ({ bankId, pad, playbackSettings }) => {
+      const bufferKey = `${bankId}:${pad.id}`
+      playbackBuffers.set(bufferKey, await getPlaybackBuffer(pad, playbackSettings.reversed))
+    }))
+
+    const stepDurationSeconds = 60 / Math.max(40, sequenceTempo) / 4
+    const exportStepCount = scheduledPads.reduce((max, scheduledPad) => Math.max(max, scheduledPad.sequenceLength), 0)
+    const scheduledBankIds = Array.from(new Set(scheduledPads.map(({ bankId }) => bankId))) as BankId[]
+    const scheduledHits: Array<{
+      bankId: BankId
+      buffer: AudioBuffer
+      when: number
+      startTime: number
+      playbackDuration: number
+      playbackRate: number
+      gain: number
+      pan: number
+    }> = []
+    let latestSourceEnd = 0
+
+    for (let stepIndex = 0; stepIndex < exportStepCount; stepIndex += 1) {
+      const when = stepIndex * stepDurationSeconds
+
+      for (const scheduledPad of scheduledPads) {
+        const bankStepIndex = stepIndex % scheduledPad.sequenceLength
+
+        if (!scheduledPad.steps[bankStepIndex]) {
+          continue
+        }
+
+        const sampleBuffer = playbackBuffers.get(`${scheduledPad.bankId}:${scheduledPad.pad.id}`)
+        if (!sampleBuffer) {
+          continue
+        }
+
+        const stepSemitoneOffset = scheduledPad.stepSemitoneOffsets[bankStepIndex] ?? 0
+        const { startTime, playbackDuration, playbackRate } = getPadPlaybackWindow(
+          sampleBuffer,
+          scheduledPad.playbackSettings,
+          scheduledPad.playbackSettings.semitoneOffset + stepSemitoneOffset,
+        )
+
+        scheduledHits.push({
+          bankId: scheduledPad.bankId,
+          buffer: sampleBuffer,
+          when,
+          startTime,
+          playbackDuration,
+          playbackRate,
+          gain: scheduledPad.playbackSettings.gain,
+          pan: scheduledPad.playbackSettings.pan,
+        })
+
+        latestSourceEnd = Math.max(latestSourceEnd, when + playbackDuration / playbackRate)
+      }
+    }
+
+    if (scheduledHits.length === 0) {
+      throw new Error('Program at least one audible step before exporting the sequence.')
+    }
+
+    const firstLoadedBuffer = playbackBuffers.values().next().value as AudioBuffer | undefined
+    const sampleRate = audioContextRef.current?.sampleRate ?? firstLoadedBuffer?.sampleRate ?? 44100
+    const effectTailPaddingSeconds = getEffectTailPaddingSeconds(selectedEffectId, effectParams, effectEnabled, isCurrentEffectSupported)
+    const renderedDurationSeconds = Math.max(exportStepCount * stepDurationSeconds, latestSourceEnd) + effectTailPaddingSeconds
+    const frameCount = Math.max(1, Math.ceil(renderedDurationSeconds * sampleRate) + Math.ceil(sampleRate * 0.02))
+    const offlineContext = new OfflineAudioContext(2, frameCount, sampleRate)
+    const effectInput = offlineContext.createGain()
+    const masterGain = offlineContext.createGain()
+    const outputLimiter = offlineContext.createDynamicsCompressor()
+
+    effectInput.gain.value = 0.78
+    masterGain.gain.value = masterOutputGain
+    outputLimiter.threshold.value = -1.5
+    outputLimiter.knee.value = 4
+    outputLimiter.ratio.value = 20
+    outputLimiter.attack.value = 0.003
+    outputLimiter.release.value = 0.12
+    masterGain.connect(outputLimiter)
+    outputLimiter.connect(offlineContext.destination)
+
+    const offlineBankGainNodes = {} as Partial<Record<BankId, GainNode>>
+
+    for (const { bankId, bankGain } of audibleBanks) {
+      const bankGainNode = offlineContext.createGain()
+      bankGainNode.gain.value = bankGain
+      bankGainNode.connect(effectInput)
+      offlineBankGainNodes[bankId] = bankGainNode
+    }
+
+    let effectCleanup: (() => void) | null = null
+    let effectUsed = effectEnabled && isCurrentEffectSupported
+    let effectFallback = false
+
+    try {
+      try {
+        const routing = createGlobalEffectRouting({
+          context: offlineContext,
+          effectInput,
+          masterGain,
+          effectId: selectedEffectId,
+          effectEnabled,
+          isEffectSupported: isCurrentEffectSupported,
+          effectParams,
+        })
+
+        effectCleanup = routing.cleanup
+      } catch (error) {
+        console.error('Offline effect render failed. Exporting the sequence dry instead.', error)
+        effectUsed = false
+        effectFallback = effectEnabled && isCurrentEffectSupported
+
+        try {
+          effectInput.disconnect()
+        } catch {}
+
+        effectInput.connect(masterGain)
+        effectCleanup = () => {
+          try {
+            effectInput.disconnect()
+          } catch {}
+        }
+      }
+
+      for (const scheduledHit of scheduledHits) {
+        const bankGainNode = offlineBankGainNodes[scheduledHit.bankId]
+
+        if (!bankGainNode) {
+          continue
+        }
+
+        const source = offlineContext.createBufferSource()
+        const gainNode = offlineContext.createGain()
+        const pannerNode = typeof offlineContext.createStereoPanner === 'function' ? offlineContext.createStereoPanner() : null
+
+        source.buffer = scheduledHit.buffer
+        source.playbackRate.value = scheduledHit.playbackRate
+        gainNode.gain.value = scheduledHit.gain
+        source.connect(gainNode)
+
+        if (pannerNode) {
+          pannerNode.pan.value = scheduledHit.pan
+          gainNode.connect(pannerNode)
+          pannerNode.connect(bankGainNode)
+        } else {
+          gainNode.connect(bankGainNode)
+        }
+
+        source.start(scheduledHit.when, scheduledHit.startTime, scheduledHit.playbackDuration)
+      }
+
+      const renderedBuffer = await offlineContext.startRendering()
+
+      return {
+        blob: encodeWavBlob(renderedBuffer),
+        fileName: `sequence-clip-${Math.round(sequenceTempo)}bpm-${exportStepCount}steps.wav`,
+        durationSeconds: renderedBuffer.duration,
+        stepCount: exportStepCount,
+        bankCount: scheduledBankIds.length,
+        effectUsed,
+        effectFallback,
+      }
+    } finally {
+      effectCleanup?.()
+    }
+  }
+
+  const exportSequenceClip = async () => {
+    setIsExportingSequence(true)
+    setSequenceExportMessage('Rendering the full sequence to a WAV clip...')
+
+    try {
+      const renderedAsset = await renderSequenceClipAsset()
+      const bankLabel = `${renderedAsset.bankCount} bank${renderedAsset.bankCount === 1 ? '' : 's'}`
+
+      triggerBlobDownload(renderedAsset.blob, renderedAsset.fileName)
+
+      if (renderedAsset.effectFallback) {
+        setSequenceExportMessage(`Exported a ${renderedAsset.stepCount}-step clip from ${bankLabel}. FX fell back to a dry render this time.`)
+      } else if (renderedAsset.effectUsed) {
+        setSequenceExportMessage(`Exported a ${renderedAsset.stepCount}-step clip from ${bankLabel} with the current FX chain.`)
+      } else {
+        setSequenceExportMessage(`Exported a ${renderedAsset.stepCount}-step clip from ${bankLabel}.`)
+      }
+    } catch (error) {
+      console.error('Sequence export failed.', error)
+      setSequenceExportMessage(error instanceof Error ? error.message : 'Sequence export failed.')
+    } finally {
+      setIsExportingSequence(false)
     }
   }
 
@@ -2282,7 +2910,7 @@ function App() {
     source.stop(when + 0.06)
   })
 
-  const playPadAudio = useEffectEvent(async (padId: string, options?: { when?: number; fromSequence?: boolean; bankId?: BankId }) => {
+  const playPadAudio = useEffectEvent(async (padId: string, options?: { when?: number; fromSequence?: boolean; bankId?: BankId; sequenceSemitoneOffset?: number }) => {
     await ensureAudioEngine()
 
     const context = audioContextRef.current
@@ -2290,6 +2918,7 @@ function App() {
     const scheduledWhen = options?.when
     const fromSequence = options?.fromSequence ?? false
     const targetBankId = options?.bankId ?? currentBankIdRef.current
+    const sequenceSemitoneOffset = options?.sequenceSemitoneOffset ?? 0
     const targetBankState = bankStatesRef.current[targetBankId]
     const currentPad = targetBankState?.pads.find((pad) => pad.id === padId)
     const playbackSettings = targetBankState?.playbackSettings[padId]
@@ -2301,12 +2930,8 @@ function App() {
       return
     }
 
-    const forwardStartTime = sampleBuffer.duration * playbackSettings.startFraction
-    const forwardEndTime = sampleBuffer.duration * playbackSettings.endFraction
-    const startTime = playbackSettings.reversed ? sampleBuffer.duration - forwardEndTime : forwardStartTime
-    const endTime = playbackSettings.reversed ? sampleBuffer.duration - forwardStartTime : forwardEndTime
-    const playbackDuration = Math.max(0.01, endTime - startTime)
-
+    const appliedSemitoneOffset = playbackSettings.semitoneOffset + sequenceSemitoneOffset
+    const { startTime, endTime, playbackDuration, playbackRate } = getPadPlaybackWindow(sampleBuffer, playbackSettings, appliedSemitoneOffset)
     const playbackMode = fromSequence ? 'one-shot' : playbackSettings.playbackMode ?? 'one-shot'
     const isLoopingMode = playbackMode === 'loop' || playbackMode === 'gate-loop'
 
@@ -2324,14 +2949,14 @@ function App() {
     const pannerNode = typeof context.createStereoPanner === 'function' ? context.createStereoPanner() : null
 
     source.buffer = sampleBuffer
-    source.playbackRate.value = Math.pow(2, playbackSettings.semitoneOffset / 12)
+    source.playbackRate.value = playbackRate
     source.loop = isLoopingMode
     gainNode.gain.value = playbackSettings.gain
     if (pannerNode) {
       pannerNode.pan.value = playbackSettings.pan
     }
 
-    const renderedDurationMs = (playbackDuration / source.playbackRate.value) * 1000
+    const renderedDurationMs = (playbackDuration / playbackRate) * 1000
 
     source.connect(gainNode)
     if (pannerNode) {
@@ -2381,6 +3006,171 @@ function App() {
     }
   })
 
+  const clearChromaticPlayheadIfIdle = (padId: string, releasedNoteId?: string) => {
+    const hasActiveChromaticNote = Array.from(activeChromaticNotesRef.current.entries()).some(([noteId, activeNote]) => (
+      noteId !== releasedNoteId && activeNote.padId === padId
+    ))
+
+    if (hasActiveChromaticNote || activePadSourcesRef.current.has(padId)) {
+      return
+    }
+
+    clearPadPlayhead(padId)
+  }
+
+  const stopChromaticNote = (noteId: string, keepActiveVisual = false) => {
+    const activeNote = activeChromaticNotesRef.current.get(noteId)
+    if (!activeNote) {
+      return
+    }
+
+    activeNote.source.onended = null
+
+    try {
+      activeNote.source.stop()
+    } catch {}
+
+    try {
+      activeNote.source.disconnect()
+    } catch {}
+
+    try {
+      activeNote.gainNode.disconnect()
+    } catch {}
+
+    if (activeNote.pannerNode) {
+      try {
+        activeNote.pannerNode.disconnect()
+      } catch {}
+    }
+
+    activeChromaticNotesRef.current.delete(noteId)
+    setActiveChromaticNoteIds((current) => current.filter((currentNoteId) => currentNoteId !== noteId))
+
+    if (!keepActiveVisual) {
+      clearChromaticPlayheadIfIdle(activeNote.padId, noteId)
+    }
+  }
+
+  const stopAllChromaticNotes = () => {
+    pressedChromaticKeysRef.current.clear()
+
+    for (const noteId of Array.from(activeChromaticNotesRef.current.keys())) {
+      stopChromaticNote(noteId)
+    }
+  }
+
+  const releaseChromaticNote = (noteId: string) => {
+    const activeNote = activeChromaticNotesRef.current.get(noteId)
+    if (!activeNote) {
+      return
+    }
+
+    if (activeNote.playbackMode === 'gate' || activeNote.playbackMode === 'gate-loop') {
+      stopChromaticNote(noteId)
+    }
+  }
+
+  const playChromaticPadNote = useEffectEvent(async (
+    padId: string,
+    relativeSemitone: number,
+    options?: { bankId?: BankId; noteId?: string },
+  ) => {
+    await ensureAudioEngine()
+
+    const context = audioContextRef.current
+    const targetBankId = options?.bankId ?? currentBankIdRef.current
+    const targetBankState = bankStatesRef.current[targetBankId]
+    const currentPad = targetBankState?.pads.find((pad) => pad.id === padId)
+    const playbackSettings = targetBankState?.playbackSettings[padId]
+    const bankGainNode = bankGainNodesRef.current[targetBankId]
+
+    if (!context || !currentPad || !playbackSettings || !bankGainNode) {
+      return
+    }
+
+    const playbackMode = playbackSettings.playbackMode ?? 'one-shot'
+    const noteId = options?.noteId ?? buildChromaticNoteId(targetBankId, padId, relativeSemitone)
+    const isLoopingMode = playbackMode === 'loop' || playbackMode === 'gate-loop'
+
+    if (activeChromaticNotesRef.current.has(noteId)) {
+      stopChromaticNote(noteId, true)
+      if (playbackMode === 'loop') {
+        return
+      }
+    }
+
+    const sampleBuffer = await getPlaybackBuffer(currentPad, playbackSettings.reversed)
+    const { startTime, endTime, playbackDuration, playbackRate } = getPadPlaybackWindow(
+      sampleBuffer,
+      playbackSettings,
+      playbackSettings.semitoneOffset + relativeSemitone,
+    )
+    const source = context.createBufferSource()
+    const gainNode = context.createGain()
+    const pannerNode = typeof context.createStereoPanner === 'function' ? context.createStereoPanner() : null
+    const renderedDurationMs = (playbackDuration / playbackRate) * 1000
+
+    source.buffer = sampleBuffer
+    source.playbackRate.value = playbackRate
+    source.loop = isLoopingMode
+    gainNode.gain.value = playbackSettings.gain
+
+    if (pannerNode) {
+      pannerNode.pan.value = playbackSettings.pan
+    }
+
+    source.connect(gainNode)
+    if (pannerNode) {
+      gainNode.connect(pannerNode)
+      pannerNode.connect(bankGainNode)
+    } else {
+      gainNode.connect(bankGainNode)
+    }
+
+    if (isLoopingMode) {
+      source.loopStart = startTime
+      source.loopEnd = endTime
+    }
+
+    activeChromaticNotesRef.current.set(noteId, { source, gainNode, pannerNode, padId, playbackMode })
+    setActiveChromaticNoteIds((current) => (current.includes(noteId) ? current : current.concat(noteId)))
+
+    source.onended = () => {
+      activeChromaticNotesRef.current.delete(noteId)
+      setActiveChromaticNoteIds((current) => current.filter((currentNoteId) => currentNoteId !== noteId))
+      clearChromaticPlayheadIfIdle(padId, noteId)
+
+      try {
+        source.disconnect()
+      } catch {}
+
+      try {
+        gainNode.disconnect()
+      } catch {}
+
+      if (pannerNode) {
+        try {
+          pannerNode.disconnect()
+        } catch {}
+      }
+    }
+
+    if (isLoopingMode) {
+      source.start(0, startTime)
+    } else {
+      source.start(0, startTime, playbackDuration)
+    }
+
+    startPlayheadAnimation(
+      padId,
+      playbackSettings.reversed ? playbackSettings.endFraction : playbackSettings.startFraction,
+      playbackSettings.reversed ? playbackSettings.startFraction : playbackSettings.endFraction,
+      isLoopingMode ? (Math.max(0.01, endTime - startTime) / playbackRate) * 1000 : renderedDurationMs,
+      { loop: isLoopingMode },
+    )
+  })
+
   const clearSequenceUiTimeouts = () => {
     sequenceUiTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId))
     sequenceUiTimeoutsRef.current = []
@@ -2401,6 +3191,7 @@ function App() {
     clearSequenceUiTimeouts()
     setSequencePlayheadStep(null)
     setIsSequencePlaying(false)
+    sequenceStartTimeRef.current = 0
     sequenceNextStepTimeRef.current = 0
     sequenceStepIndexRef.current = 0
   }
@@ -2409,6 +3200,8 @@ function App() {
     stopSequencer()
     stopLoopPlayback()
     stopAllPadSources()
+    stopAllChromaticNotes()
+    releaseAllMappedMidiNotes()
     setActivePadIds([])
     setIsLoopPlaying(false)
     setEditorPlayheadFraction(null)
@@ -2455,7 +3248,8 @@ function App() {
           return
         }
 
-        void playPadAudio(pad.id, { when, fromSequence: true, bankId })
+        const stepSemitoneOffset = bankState.stepSemitoneOffsets[pad.id]?.[bankStepIndex] ?? 0
+        void playPadAudio(pad.id, { when, fromSequence: true, bankId, sequenceSemitoneOffset: stepSemitoneOffset })
 
         if (bankId !== currentBankIdRef.current) {
           return
@@ -2487,6 +3281,58 @@ function App() {
     }
   })
 
+  const recordPadPressToSequence = useEffectEvent((padId: string, bankId = currentBankIdRef.current, stepSemitoneOffset = 0) => {
+    const context = audioContextRef.current
+    const bankState = bankStatesRef.current[bankId]
+
+    if (!isRecordArmed || !isSequencePlaying || !context || !bankState || bankState.sequenceLength <= 0) {
+      return
+    }
+
+    const stepDurationSeconds = 60 / Math.max(40, sequenceTempoRef.current) / 4
+    const elapsedSteps = Math.max(0, (context.currentTime - sequenceStartTimeRef.current) / stepDurationSeconds)
+    const quantizedStepIndex = Math.round(elapsedSteps)
+    const targetStepIndex = ((quantizedStepIndex % bankState.sequenceLength) + bankState.sequenceLength) % bankState.sequenceLength
+
+    setBankStates((current) => {
+      const bank = current[bankId]
+      if (!bank) {
+        return current
+      }
+
+      const existingSteps = [...(bank.stepPattern[padId] ?? Array.from({ length: bank.sequenceLength }, () => false))]
+      const existingOffsets = [...(bank.stepSemitoneOffsets[padId] ?? Array.from({ length: bank.sequenceLength }, () => 0))]
+      while (existingSteps.length < bank.sequenceLength) {
+        existingSteps.push(false)
+      }
+      while (existingOffsets.length < bank.sequenceLength) {
+        existingOffsets.push(0)
+      }
+
+      if (existingSteps[targetStepIndex] && existingOffsets[targetStepIndex] === stepSemitoneOffset) {
+        return current
+      }
+
+      existingSteps[targetStepIndex] = true
+      existingOffsets[targetStepIndex] = stepSemitoneOffset
+
+      return {
+        ...current,
+        [bankId]: {
+          ...bank,
+          stepPattern: {
+            ...bank.stepPattern,
+            [padId]: existingSteps,
+          },
+          stepSemitoneOffsets: {
+            ...bank.stepSemitoneOffsets,
+            [padId]: existingOffsets,
+          },
+        },
+      }
+    })
+  })
+
   const toggleSequencePlayback = async () => {
     if (isSequencePlaying) {
       stopSequencer()
@@ -2506,6 +3352,7 @@ function App() {
     setSequencePlayheadStep(null)
     sequenceStepIndexRef.current = 0
     sequenceNextStepTimeRef.current = context.currentTime + 0.05
+    sequenceStartTimeRef.current = sequenceNextStepTimeRef.current
     setIsSequencePlaying(true)
     runSequenceScheduler()
     sequenceSchedulerRef.current = window.setInterval(() => {
@@ -2514,7 +3361,88 @@ function App() {
   }
 
   useEffect(() => {
+    if (workView === 'editor' && editorSource === 'pad' && isChromaticModeActive) {
+      return
+    }
+
+    pressedChromaticKeysRef.current.clear()
+    stopAllChromaticNotes()
+  }, [editorSource, isChromaticModeActive, selectedPad.id, workView, currentBankId])
+
+  useEffect(() => {
+    if (!isChromaticModeActive || workView !== 'editor' || editorSource !== 'pad') {
+      return
+    }
+
+    const isTypingTarget = (target: EventTarget | null) => (
+      target instanceof HTMLTextAreaElement ||
+      target instanceof HTMLSelectElement ||
+      (target instanceof HTMLInputElement && target.type !== 'range')
+    )
+
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey || isTypingTarget(event.target)) {
+        return
+      }
+
+      const key = event.key.toUpperCase()
+
+      if (key === 'Z' || key === 'X') {
+        event.preventDefault()
+
+        if (event.repeat) {
+          return
+        }
+
+        setChromaticOctave((current) => clamp(current + (key === 'X' ? 1 : -1), chromaticMinOctave, chromaticMaxOctave))
+        return
+      }
+
+      const chromaticKey = chromaticKeyboardMap.get(key)
+      if (!chromaticKey) {
+        return
+      }
+
+      event.preventDefault()
+
+      if (event.repeat || pressedChromaticKeysRef.current.has(key)) {
+        return
+      }
+
+      const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, chromaticKey.semitoneOffset)
+      const noteId = buildChromaticNoteId(currentBankIdRef.current, selectedPad.id, relativeSemitone)
+      pressedChromaticKeysRef.current.set(key, noteId)
+      recordPadPressToSequence(selectedPad.id, currentBankIdRef.current, relativeSemitone)
+      void playChromaticPadNote(selectedPad.id, relativeSemitone, { bankId: currentBankIdRef.current, noteId })
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      const key = event.key.toUpperCase()
+      const noteId = pressedChromaticKeysRef.current.get(key)
+
+      if (!noteId) {
+        return
+      }
+
+      pressedChromaticKeysRef.current.delete(key)
+      releaseChromaticNote(noteId)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [chromaticOctave, editorSource, isChromaticModeActive, playChromaticPadNote, selectedPad.id, workView])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isChromaticModeActive && workView === 'editor' && editorSource === 'pad') {
+        return
+      }
+
       if (event.repeat || event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
@@ -2536,18 +3464,14 @@ function App() {
       }
 
       event.preventDefault()
-      setBankStates((current) => ({
-        ...current,
-        [currentBankId]: {
-          ...current[currentBankId],
-          selectedPadId: matchedPad.id,
-        },
-      }))
-      setActivePadIds((current) => (current.includes(matchedPad.id) ? current : current.concat(matchedPad.id)))
-      void playPadAudio(matchedPad.id)
+      triggerPadInBank(matchedPad.id, currentBankId)
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
+      if (isChromaticModeActive && workView === 'editor' && editorSource === 'pad') {
+        return
+      }
+
       const key = event.key.toUpperCase()
       const matchedPad = currentBankPads.find((pad) => pad.keyTrigger === key)
 
@@ -2555,7 +3479,7 @@ function App() {
         return
       }
 
-      releasePad(matchedPad.id)
+      releasePadInBank(matchedPad.id, currentBankId)
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -2565,7 +3489,7 @@ function App() {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
     }
-  }, [currentBankId, currentBankPads, playPadAudio])
+  }, [currentBankId, currentBankPads, editorSource, isChromaticModeActive, playPadAudio, workView])
 
   const updateCurrentBank = (updater: (bank: BankState) => BankState) => {
     setBankStates((current) => ({
@@ -2574,17 +3498,22 @@ function App() {
     }))
   }
 
-  const triggerPad = (padId: string) => {
-    updateCurrentBank((bank) => ({
-      ...bank,
-      selectedPadId: padId,
+  const triggerPadInBank = (padId: string, bankId: BankId) => {
+    setBankStates((current) => ({
+      ...current,
+      [bankId]: {
+        ...current[bankId],
+        selectedPadId: padId,
+      },
     }))
     setActivePadIds((current) => (current.includes(padId) ? current : current.concat(padId)))
-    void playPadAudio(padId)
+    recordPadPressToSequence(padId, bankId)
+    void playPadAudio(padId, { bankId })
   }
 
-  const releasePad = (padId: string) => {
-    const mode = currentBankState.playbackSettings[padId]?.playbackMode ?? 'one-shot'
+  const releasePadInBank = (padId: string, bankId: BankId) => {
+    const bankState = bankStatesRef.current[bankId]
+    const mode = bankState?.playbackSettings[padId]?.playbackMode ?? 'one-shot'
 
     if (mode === 'gate' || mode === 'gate-loop') {
       stopPadSource(padId)
@@ -2597,12 +3526,207 @@ function App() {
     }
   }
 
+  const triggerPad = (padId: string) => {
+    triggerPadInBank(padId, currentBankIdRef.current)
+  }
+
+  const releasePad = (padId: string) => {
+    releasePadInBank(padId, currentBankIdRef.current)
+  }
+
+  const releaseAllMappedMidiNotes = () => {
+    for (const activeNote of activeMidiNotesRef.current.values()) {
+      releasePadInBank(activeNote.padId, activeNote.bankId)
+    }
+
+    activeMidiNotesRef.current.clear()
+  }
+
+  const updateMidiInputs = useEffectEvent((access: MIDIAccess) => {
+    const nextInputs = Array.from(access.inputs.values())
+      .filter((input) => input.state !== 'disconnected')
+      .map((input) => ({
+        id: input.id,
+        name: input.name?.trim() || `MIDI Input ${input.id.slice(-4)}`,
+      }))
+
+    setAvailableMidiInputs(nextInputs)
+
+    const storedSelectedInputId = selectedMidiInputIdRef.current
+    const nextSelectedInputId = storedSelectedInputId && nextInputs.some((input) => input.id === storedSelectedInputId)
+      ? storedSelectedInputId
+      : nextInputs[0]?.id ?? null
+
+    if (storedSelectedInputId !== nextSelectedInputId) {
+      releaseAllMappedMidiNotes()
+      setSelectedMidiInputId(nextSelectedInputId)
+    }
+
+    setMidiAccessState('ready')
+    setMidiStatusMessage(
+      nextSelectedInputId
+        ? `Listening for notes from ${nextInputs.find((input) => input.id === nextSelectedInputId)?.name ?? 'your controller'}.`
+        : 'MIDI is enabled, but no input devices are currently connected.',
+    )
+  })
+
+  const assignMidiNoteToPad = (padId: string, noteNumber: number) => {
+    setMidiPadNoteMappings((current) => {
+      const nextMappings = { ...current }
+
+      for (const [mappedPadId, mappedNoteNumber] of Object.entries(nextMappings)) {
+        if (mappedPadId !== padId && mappedNoteNumber === noteNumber) {
+          nextMappings[mappedPadId] = null
+        }
+      }
+
+      nextMappings[padId] = noteNumber
+      midiPadNoteMappingsRef.current = nextMappings
+      return nextMappings
+    })
+
+    midiLearnPadIdRef.current = null
+    setMidiLearnPadId(null)
+    setMidiStatusMessage(`Mapped ${formatMidiNoteLabel(noteNumber)} to ${currentBankPads.find((pad) => pad.id === padId)?.label ?? padId}.`)
+  }
+
+  const getMidiListeningMessage = (inputId: string | null) => {
+    const selectedInputName = availableMidiInputs.find((input) => input.id === inputId)?.name
+    if (selectedInputName) {
+      return `Listening for notes from ${selectedInputName}.`
+    }
+
+    if (midiAccessRef.current) {
+      return 'MIDI is enabled, but no input devices are currently connected.'
+    }
+
+    return 'Enable MIDI to map controller notes to the pad grid.'
+  }
+
+  const handleMidiInputSelection = (nextInputId: string | null) => {
+    releaseAllMappedMidiNotes()
+    selectedMidiInputIdRef.current = nextInputId
+    setSelectedMidiInputId(nextInputId)
+
+    if (!midiLearnPadIdRef.current) {
+      setMidiStatusMessage(getMidiListeningMessage(nextInputId))
+    }
+  }
+
+  const handleMidiMessage = useEffectEvent((event: MIDIMessageEvent) => {
+    const [statusByte = 0, noteNumber = 0, velocity = 0] = event.data ?? []
+    const messageType = statusByte & 0xf0
+    const channel = (statusByte & 0x0f) + 1
+    const noteKey = `${channel}:${noteNumber}`
+
+    if (messageType !== 0x90 && messageType !== 0x80) {
+      return
+    }
+
+    if (messageType === 0x90 && velocity > 0) {
+      const learningPadId = midiLearnPadIdRef.current
+      if (learningPadId) {
+        assignMidiNoteToPad(learningPadId, noteNumber)
+        return
+      }
+
+      const mappedPadId = midiPadNoteMappingsRef.current
+        ? Object.entries(midiPadNoteMappingsRef.current).find(([, mappedNoteNumber]) => mappedNoteNumber === noteNumber)?.[0] ?? null
+        : null
+
+      if (!mappedPadId) {
+        return
+      }
+
+      const bankId = currentBankIdRef.current
+      activeMidiNotesRef.current.set(noteKey, { padId: mappedPadId, bankId })
+      triggerPadInBank(mappedPadId, bankId)
+      return
+    }
+
+    const activeNote = activeMidiNotesRef.current.get(noteKey)
+    if (!activeNote) {
+      return
+    }
+
+    activeMidiNotesRef.current.delete(noteKey)
+    releasePadInBank(activeNote.padId, activeNote.bankId)
+  })
+
+  const enableMidiInput = async () => {
+    if (!midiSupported) {
+      setMidiAccessState('error')
+      setMidiStatusMessage('This browser does not expose Web MIDI. Try Chrome or another Chromium-based browser on localhost/https.')
+      return
+    }
+
+    try {
+      setMidiAccessState('connecting')
+      setMidiStatusMessage('Requesting MIDI access...')
+      const midiAccess = await (navigator as NavigatorWithMidi).requestMIDIAccess?.({ sysex: false })
+      if (!midiAccess) {
+        throw new Error('Web MIDI access was unavailable.')
+      }
+
+      midiAccessRef.current = midiAccess
+      midiAccess.onstatechange = () => {
+        updateMidiInputs(midiAccess)
+      }
+      updateMidiInputs(midiAccess)
+    } catch (error) {
+      console.error('Failed to enable MIDI.', error)
+      setMidiAccessState('error')
+      setMidiStatusMessage(error instanceof Error ? error.message : 'Failed to enable MIDI input.')
+    }
+  }
+
+  const toggleMidiLearnForPad = (pad: Pad) => {
+    const nextLearnPadId = midiLearnPadIdRef.current === pad.id ? null : pad.id
+    midiLearnPadIdRef.current = nextLearnPadId
+    setMidiLearnPadId(nextLearnPadId)
+
+    if (nextLearnPadId) {
+      setIsMidiPanelOpen(true)
+      setMidiStatusMessage(`Press a MIDI note to map ${pad.label}.`)
+      return
+    }
+
+    setMidiStatusMessage(getMidiListeningMessage(selectedMidiInputIdRef.current))
+  }
+
+  const cancelMidiLearn = () => {
+    midiLearnPadIdRef.current = null
+    setMidiLearnPadId(null)
+    setMidiStatusMessage(getMidiListeningMessage(selectedMidiInputIdRef.current))
+  }
+
+  const toggleMidiPanel = () => {
+    const nextIsOpen = !isMidiPanelOpen
+    if (!nextIsOpen && midiLearnPadIdRef.current) {
+      cancelMidiLearn()
+    }
+    setIsMidiPanelOpen(nextIsOpen)
+  }
+
+  const triggerChromaticKey = (semitoneOffset: number) => {
+    const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, semitoneOffset)
+    const noteId = buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone)
+    recordPadPressToSequence(selectedPad.id, currentBankId, relativeSemitone)
+    void playChromaticPadNote(selectedPad.id, relativeSemitone, { bankId: currentBankId, noteId })
+  }
+
+  const releaseChromaticKey = (semitoneOffset: number) => {
+    const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, semitoneOffset)
+    releaseChromaticNote(buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone))
+  }
+
   const switchBank = (bankId: BankId) => {
     if (bankId === currentBankId) {
       return
     }
 
     stopAllPadSources()
+    stopAllChromaticNotes()
     setEditorPlayheadFraction(null)
     setActivePadIds([])
     startTransition(() => {
@@ -2774,10 +3898,16 @@ function App() {
   const toggleSequenceStep = (padId: string, stepIndex: number) => {
     updateCurrentBank((bank) => {
       const existingSteps = [...(bank.stepPattern[padId] ?? Array.from({ length: bank.sequenceLength }, () => false))]
+      const existingOffsets = [...(bank.stepSemitoneOffsets[padId] ?? Array.from({ length: bank.sequenceLength }, () => 0))]
       while (existingSteps.length < bank.sequenceLength) {
         existingSteps.push(false)
       }
-      existingSteps[stepIndex] = !existingSteps[stepIndex]
+      while (existingOffsets.length < bank.sequenceLength) {
+        existingOffsets.push(0)
+      }
+      const nextIsActive = !existingSteps[stepIndex]
+      existingSteps[stepIndex] = nextIsActive
+      existingOffsets[stepIndex] = 0
 
       return {
         ...bank,
@@ -2785,6 +3915,10 @@ function App() {
         stepPattern: {
           ...bank.stepPattern,
           [padId]: existingSteps,
+        },
+        stepSemitoneOffsets: {
+          ...bank.stepSemitoneOffsets,
+          [padId]: existingOffsets,
         },
       }
     })
@@ -2812,11 +3946,24 @@ function App() {
           return [pad.id, resized]
         }),
       ) as Record<string, boolean[]>
+      const nextStepSemitoneOffsets = Object.fromEntries(
+        bank.pads.map((pad) => {
+          const existingSteps = bank.stepPattern[pad.id] ?? []
+          const existingOffsets = bank.stepSemitoneOffsets[pad.id] ?? []
+          const baseSteps = Array.from({ length: sourceLength }, (_, index) => existingSteps[index] ?? false)
+          const baseOffsets = Array.from({ length: sourceLength }, (_, index) => baseSteps[index] ? (existingOffsets[index] ?? 0) : 0)
+          const resized = Array.from({ length: nextLength }, (_, index) => (
+            baseSteps[index % sourceLength] ? baseOffsets[index % sourceLength] ?? 0 : 0
+          ))
+          return [pad.id, resized]
+        }),
+      ) as Record<string, number[]>
 
       return {
         ...bank,
         sequenceLength: nextLength,
         stepPattern: nextPattern,
+        stepSemitoneOffsets: nextStepSemitoneOffsets,
       }
     })
   }
@@ -2895,10 +4042,14 @@ function App() {
           return [pad.id, Array.from({ length: currentSequenceLength }, (_, index) => activeStepSet.has(index))]
         }),
       ) as Record<string, boolean[]>
+      const nextStepSemitoneOffsets = Object.fromEntries(
+        currentBankPads.map((pad) => [pad.id, Array.from({ length: currentSequenceLength }, () => 0)]),
+      ) as Record<string, number[]>
 
       updateCurrentBank((bank) => ({
         ...bank,
         stepPattern: nextPattern,
+        stepSemitoneOffsets: nextStepSemitoneOffsets,
       }))
 
       setSequenceGenerationStatus('idle')
@@ -2941,6 +4092,9 @@ function App() {
       stepPattern: Object.fromEntries(
         bank.pads.map((pad) => [pad.id, Array.from({ length: bank.sequenceLength }, () => false)]),
       ) as Record<string, boolean[]>,
+      stepSemitoneOffsets: Object.fromEntries(
+        bank.pads.map((pad) => [pad.id, Array.from({ length: bank.sequenceLength }, () => 0)]),
+      ) as Record<string, number[]>,
     }))
     setSequenceGenerationStatus('idle')
     setSequenceGenerationAction(null)
@@ -2992,16 +4146,7 @@ function App() {
       }
 
       if (payload.generatedLoop) {
-        if (loopStopTimeoutRef.current) {
-          window.clearTimeout(loopStopTimeoutRef.current)
-          loopStopTimeoutRef.current = null
-        }
-
-        if (loopAudioRef.current) {
-          loopAudioRef.current.pause()
-          loopAudioRef.current = null
-        }
-
+        stopLoopPlayback()
         setGeneratedLoop(payload.generatedLoop)
         setEditorSource('loop')
         setIsLoopPlaying(false)
@@ -3106,96 +4251,131 @@ function App() {
     }
 
     activePadPlayheadIdRef.current = null
+    const playbackId = activeLoopPlaybackRef.current?.id
     const tick = () => {
-      const audio = loopAudioRef.current
-      if (!audio) {
-        setEditorPlayheadFraction(null)
+      const activeLoopPlayback = activeLoopPlaybackRef.current
+      const context = audioContextRef.current
+      if (!activeLoopPlayback || activeLoopPlayback.id !== playbackId || !context) {
+        playheadFrameRef.current = null
         return
       }
 
-      const fraction = Math.min(1, Math.max(0, audio.currentTime / durationSeconds))
+      const elapsed = Math.max(0, context.currentTime - activeLoopPlayback.startedAtContextTime)
+      const playheadSeconds = activeLoopPlayback.loop
+        ? activeLoopPlayback.playbackStartSeconds + (elapsed % activeLoopPlayback.playbackSpanSeconds)
+        : Math.min(activeLoopPlayback.playbackStartSeconds + elapsed, activeLoopPlayback.playbackStartSeconds + activeLoopPlayback.playbackSpanSeconds)
+      const fraction = Math.min(1, Math.max(0, playheadSeconds / durationSeconds))
       setEditorPlayheadFraction(fraction)
 
-      if (!audio.paused) {
+      if (activeLoopPlayback.loop || elapsed < activeLoopPlayback.playbackSpanSeconds) {
         playheadFrameRef.current = window.requestAnimationFrame(tick)
+        return
       }
+
+      playheadFrameRef.current = null
     }
 
     setEditorPlayheadFraction(Math.min(1, Math.max(0, startSeconds / durationSeconds)))
     playheadFrameRef.current = window.requestAnimationFrame(tick)
   }
 
-  const stopLoopPlayback = () => {
-    if (loopStopTimeoutRef.current) {
-      window.clearTimeout(loopStopTimeoutRef.current)
-      loopStopTimeoutRef.current = null
-    }
-
+  const releaseLoopPlayback = (nextPlayheadFraction: number | null = null, playbackOverride: ActiveLoopPlayback | null = null) => {
     if (playheadFrameRef.current) {
       window.cancelAnimationFrame(playheadFrameRef.current)
       playheadFrameRef.current = null
     }
 
     activePadPlayheadIdRef.current = null
-    if (loopAudioRef.current) {
-      loopAudioRef.current.pause()
-      loopAudioRef.current.currentTime = 0
+
+    const activeLoopPlayback = playbackOverride ?? activeLoopPlaybackRef.current
+    if (playbackOverride || activeLoopPlaybackRef.current?.id === activeLoopPlayback?.id) {
+      activeLoopPlaybackRef.current = null
     }
 
-    setEditorPlayheadFraction(null)
+    if (activeLoopPlayback) {
+      activeLoopPlayback.source.onended = null
+      try {
+        activeLoopPlayback.source.stop()
+      } catch {}
+      try {
+        activeLoopPlayback.source.disconnect()
+      } catch {}
+      try {
+        activeLoopPlayback.gainNode.disconnect()
+      } catch {}
+    }
+
+    setEditorPlayheadFraction(nextPlayheadFraction)
     setIsLoopPlaying(false)
   }
 
-  const ensureLoopAudio = () => {
-    if (!generatedLoop) {
-      return null
-    }
-
-    const expectedUrl = new URL(generatedLoop.sampleUrl, window.location.origin).toString()
-
-    if (!loopAudioRef.current) {
-      const audio = new Audio(expectedUrl)
-      audio.addEventListener('ended', () => setIsLoopPlaying(false))
-      loopAudioRef.current = audio
-    }
-
-    const audio = loopAudioRef.current
-    if (audio.src !== expectedUrl) {
-      audio.pause()
-      audio.src = expectedUrl
-      audio.currentTime = 0
-    }
-
-    return audio
+  const stopLoopPlayback = (nextPlayheadFraction: number | null = null) => {
+    releaseLoopPlayback(nextPlayheadFraction)
   }
 
-  const waitForLoopAudioReady = async (audio: HTMLAudioElement) => {
-    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+  const startLoopPlayback = async (options?: {
+    startSeconds?: number
+    endSeconds?: number
+    loop?: boolean
+    idlePlayheadFraction?: number | null
+  }) => {
+    if (!generatedLoop) {
       return
     }
 
-    await new Promise<void>((resolve, reject) => {
-      const handleReady = () => {
-        cleanup()
-        resolve()
+    const context = getAudioContext()
+    if (context.state === 'suspended') {
+      await context.resume()
+    }
+
+    const buffer = await loadAudioBuffer(generatedLoop.sampleUrl, generatedLoop.sampleFile)
+    const timelineDuration = Math.max(0.01, buffer.duration || getLoopDurationSeconds(generatedLoop))
+    const startSeconds = Math.min(Math.max(0, options?.startSeconds ?? 0), Math.max(0, timelineDuration - 0.01))
+    const endSeconds = Math.min(Math.max(startSeconds + 0.01, options?.endSeconds ?? timelineDuration), timelineDuration)
+    const playbackSpanSeconds = Math.max(0.01, endSeconds - startSeconds)
+
+    stopLoopPlayback(options?.idlePlayheadFraction ?? null)
+
+    const gainNode = context.createGain()
+    gainNode.gain.value = 1
+    gainNode.connect(context.destination)
+
+    const source = context.createBufferSource()
+    source.buffer = buffer
+    source.connect(gainNode)
+
+    if (options?.loop) {
+      source.loop = true
+      source.loopStart = startSeconds
+      source.loopEnd = endSeconds
+      source.start(0, startSeconds)
+    } else {
+      source.start(0, startSeconds, playbackSpanSeconds)
+    }
+
+    const playback: ActiveLoopPlayback = {
+      id: loopPlaybackIdRef.current + 1,
+      source,
+      gainNode,
+      timelineDurationSeconds: timelineDuration,
+      playbackStartSeconds: startSeconds,
+      playbackSpanSeconds,
+      startedAtContextTime: context.currentTime,
+      loop: Boolean(options?.loop),
+    }
+
+    loopPlaybackIdRef.current = playback.id
+    activeLoopPlaybackRef.current = playback
+    source.onended = () => {
+      if (activeLoopPlaybackRef.current?.id !== playback.id) {
+        return
       }
 
-      const handleError = () => {
-        cleanup()
-        reject(new Error('Failed to load generated loop preview audio.'))
-      }
+      releaseLoopPlayback(options?.idlePlayheadFraction ?? null, playback)
+    }
 
-      const cleanup = () => {
-        audio.removeEventListener('loadedmetadata', handleReady)
-        audio.removeEventListener('canplay', handleReady)
-        audio.removeEventListener('error', handleError)
-      }
-
-      audio.addEventListener('loadedmetadata', handleReady)
-      audio.addEventListener('canplay', handleReady)
-      audio.addEventListener('error', handleError)
-      audio.load()
-    })
+    startLoopPlayheadMonitor(playback.timelineDurationSeconds, playback.playbackStartSeconds)
+    setIsLoopPlaying(true)
   }
 
   const toggleLoopPreview = async () => {
@@ -3203,28 +4383,13 @@ function App() {
       return
     }
 
-    const audio = ensureLoopAudio()
-    if (!audio) {
-      return
-    }
-
-    if (!audio.paused && audio.loop) {
+    if (activeLoopPlaybackRef.current?.loop) {
       stopLoopPlayback()
       return
     }
 
-    if (loopStopTimeoutRef.current) {
-      window.clearTimeout(loopStopTimeoutRef.current)
-      loopStopTimeoutRef.current = null
-    }
-
     try {
-      await waitForLoopAudioReady(audio)
-      audio.loop = true
-      audio.currentTime = 0
-      await audio.play()
-      startLoopPlayheadMonitor(getLoopDurationSeconds(generatedLoop), 0)
-      setIsLoopPlaying(true)
+      await startLoopPlayback({ loop: true })
     } catch (error) {
       console.error(error)
       setIsLoopPlaying(false)
@@ -3298,39 +4463,17 @@ function App() {
       return
     }
 
-    const audio = ensureLoopAudio()
-    if (!audio) {
-      return
-    }
-
-    if (loopStopTimeoutRef.current) {
-      window.clearTimeout(loopStopTimeoutRef.current)
-    }
-
     try {
-      await waitForLoopAudioReady(audio)
-
-      const loopDuration = Math.max(0.01, audio.duration || getLoopDurationSeconds(generatedLoop))
+      const loopDuration = Math.max(0.01, getLoopDurationSeconds(generatedLoop))
       const safeStart = Math.min(Math.max(0, region.start), loopDuration)
+      const safeEnd = Math.min(Math.max(region.end, safeStart + 0.01), loopDuration)
 
-      audio.pause()
-      audio.loop = false
-      audio.currentTime = safeStart
-      await audio.play()
-      startLoopPlayheadMonitor(loopDuration, safeStart)
-      setIsLoopPlaying(true)
-
-      loopStopTimeoutRef.current = window.setTimeout(() => {
-        audio.pause()
-        audio.currentTime = safeStart
-        if (playheadFrameRef.current) {
-          window.cancelAnimationFrame(playheadFrameRef.current)
-          playheadFrameRef.current = null
-        }
-        setEditorPlayheadFraction(safeStart / loopDuration)
-        setIsLoopPlaying(false)
-        loopStopTimeoutRef.current = null
-      }, Math.max(20, (Math.max(region.end, safeStart) - safeStart) * 1000))
+      await startLoopPlayback({
+        startSeconds: safeStart,
+        endSeconds: safeEnd,
+        loop: false,
+        idlePlayheadFraction: safeStart / loopDuration,
+      })
     } catch (error) {
       console.error(error)
       setIsLoopPlaying(false)
@@ -3353,6 +4496,17 @@ function App() {
     if (!selectedChopId && normalized[0]) {
       setSelectedChopId(normalized[0].id)
     }
+  }
+
+  const resetLoopChops = () => {
+    if (!generatedLoop) {
+      return
+    }
+
+    const nextRegions = buildChopRegions(getLoopDurationSeconds(generatedLoop), loopChopCount)
+    setLoopChopRegions(nextRegions)
+    setSelectedChopId((current) => nextRegions.find((region) => region.id === current)?.id ?? nextRegions[0]?.id ?? null)
+    setGenerationMessage('Reset the loop chops back to the even 16-slice grid.')
   }
 
   const loadLoopToBank = (targetBankId: BankId) => {
@@ -3608,125 +4762,208 @@ function App() {
                 />
               </div>
               {editorSource === 'pad' ? (
-                <div className="editor-pad-controls">
+                <div className="editor-pad-footer">
+                  <div className={isChromaticModeActive ? 'editor-pad-controls is-chromatic-active' : 'editor-pad-controls'}>
+                    <div className="playback-mode-group editor-playback-mode-group">
+                      <div className="editor-playback-mode-radios" role="radiogroup" aria-label="Playback mode">
+                        {(['one-shot', 'gate-loop', 'gate', 'loop'] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            type="button"
+                            role="radio"
+                            aria-checked={playbackMode === mode}
+                            className={playbackMode === mode ? 'playback-mode-button is-current' : 'playback-mode-button'}
+                            onClick={() => updatePlaybackMode(selectedPad.id, mode)}
+                          >
+                            {mode}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        aria-pressed={isPadReversed}
+                        className={isPadReversed ? 'playback-mode-button is-current' : 'playback-mode-button'}
+                        onClick={() => togglePadReverse(selectedPad.id)}
+                      >
+                        Reverse
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={isChromaticModeActive}
+                        className={isChromaticModeActive ? 'playback-mode-button is-current chromatic-mode-button' : 'playback-mode-button chromatic-mode-button'}
+                        onClick={() => setIsChromaticModeActive((current) => !current)}
+                        title="Chromatic keyboard mode"
+                      >
+                        <Piano size={14} strokeWidth={2.1} aria-hidden="true" />
+                        <span>Keys</span>
+                      </button>
+                    </div>
+
+                    <div className="trim-controls editor-trim-controls">
+                      <div className="trim-control">
+                        <span>Pitch</span>
+                        <Slider.Root
+                          className="trim-slider-root single-thumb"
+                          min={-12}
+                          max={12}
+                          step={1}
+                          value={[semitoneOffset]}
+                          onValueChange={([value]) => updateSemitoneOffset(selectedPad.id, value)}
+                        >
+                          <Slider.Track className="trim-slider-track">
+                            <Slider.Range className="trim-slider-range" />
+                          </Slider.Track>
+                          <Slider.Thumb className="trim-slider-thumb" aria-label="Pitch" />
+                        </Slider.Root>
+                        <div className="trim-readout single-value">
+                          <strong>{semitoneOffset > 0 ? '+' : ''}{semitoneOffset} st</strong>
+                        </div>
+                      </div>
+
+                      <div className="trim-control">
+                        <span>Gain</span>
+                        <Slider.Root
+                          className="trim-slider-root single-thumb"
+                          min={0}
+                          max={1.5}
+                          step={0.01}
+                          value={[padGain]}
+                          onValueChange={([value]) => updatePadGain(selectedPad.id, value)}
+                        >
+                          <Slider.Track className="trim-slider-track">
+                            <Slider.Range className="trim-slider-range" />
+                          </Slider.Track>
+                          <Slider.Thumb className="trim-slider-thumb" aria-label="Gain" />
+                        </Slider.Root>
+                        <div className="trim-readout single-value">
+                          <strong>{padGain.toFixed(2)}</strong>
+                        </div>
+                      </div>
+
+                      <div className="trim-control">
+                        <span>Pan</span>
+                        <Slider.Root
+                          className="trim-slider-root single-thumb"
+                          min={-1}
+                          max={1}
+                          step={0.01}
+                          value={[padPan]}
+                          onValueChange={([value]) => updatePadPan(selectedPad.id, value)}
+                        >
+                          <Slider.Track className="trim-slider-track">
+                            <Slider.Range className="trim-slider-range" />
+                          </Slider.Track>
+                          <Slider.Thumb className="trim-slider-thumb" aria-label="Pan" />
+                        </Slider.Root>
+                        <div className="trim-readout single-value">
+                          <strong>{padPan === 0 ? 'C' : padPan < 0 ? `L ${Math.round(Math.abs(padPan) * 100)}` : `R ${Math.round(padPan * 100)}`}</strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    {isChromaticModeActive ? (
+                      <div className="editor-chromatic-panel">
+                        <div className="editor-chromatic-toolbar">
+                          <div className="editor-chromatic-heading">
+                            <strong>Chromatic Keyboard</strong>
+                            <span>{selectedPad.label} mapped across {chromaticRangeLabel}</span>
+                          </div>
+                          <div className="editor-chromatic-octave">
+                            <button
+                              type="button"
+                              className="playback-mode-button chromatic-octave-button"
+                              onClick={() => setChromaticOctave((current) => clamp(current - 1, chromaticMinOctave, chromaticMaxOctave))}
+                              disabled={chromaticOctave <= chromaticMinOctave}
+                              aria-label="Lower chromatic octave"
+                            >
+                              <ChevronLeft size={14} strokeWidth={2.1} aria-hidden="true" />
+                            </button>
+                            <div className="editor-chromatic-octave-readout">
+                              <span>Octave</span>
+                              <strong>{chromaticRangeLabel}</strong>
+                            </div>
+                            <button
+                              type="button"
+                              className="playback-mode-button chromatic-octave-button"
+                              onClick={() => setChromaticOctave((current) => clamp(current + 1, chromaticMinOctave, chromaticMaxOctave))}
+                              disabled={chromaticOctave >= chromaticMaxOctave}
+                              aria-label="Raise chromatic octave"
+                            >
+                              <ChevronRight size={14} strokeWidth={2.1} aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="editor-chromatic-keyboard" role="group" aria-label="Chromatic keyboard">
+                          <div className="editor-chromatic-white-keys">
+                            {chromaticKeyLayout.filter((key) => key.kind === 'white').map((key) => {
+                              const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, key.semitoneOffset)
+                              const noteId = buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone)
+                              const isActive = activeChromaticNoteSet.has(noteId)
+
+                              return (
+                                <button
+                                  key={key.id}
+                                  type="button"
+                                  className={isActive ? 'editor-chromatic-key white-key is-active' : 'editor-chromatic-key white-key'}
+                                  onPointerDown={() => triggerChromaticKey(key.semitoneOffset)}
+                                  onPointerUp={() => releaseChromaticKey(key.semitoneOffset)}
+                                  onPointerLeave={() => releaseChromaticKey(key.semitoneOffset)}
+                                  onBlur={() => releaseChromaticKey(key.semitoneOffset)}
+                                >
+                                  <span className="editor-chromatic-note-label">{getChromaticNoteLabel(chromaticOctave, key.semitoneOffset)}</span>
+                                  <span className="editor-chromatic-keyboard-label">{key.keyboardKey}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                          <div className="editor-chromatic-black-keys">
+                            {chromaticKeyLayout.filter((key) => key.kind === 'black').map((key) => {
+                              const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, key.semitoneOffset)
+                              const noteId = buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone)
+                              const isActive = activeChromaticNoteSet.has(noteId)
+
+                              return (
+                                <button
+                                  key={key.id}
+                                  type="button"
+                                  className={isActive ? 'editor-chromatic-key black-key is-active' : 'editor-chromatic-key black-key'}
+                                  style={{ left: `${key.blackCenterPercent ?? 0}%` }}
+                                  onPointerDown={() => triggerChromaticKey(key.semitoneOffset)}
+                                  onPointerUp={() => releaseChromaticKey(key.semitoneOffset)}
+                                  onPointerLeave={() => releaseChromaticKey(key.semitoneOffset)}
+                                  onBlur={() => releaseChromaticKey(key.semitoneOffset)}
+                                >
+                                  <span className="editor-chromatic-note-label">{getChromaticNoteLabel(chromaticOctave, key.semitoneOffset)}</span>
+                                  <span className="editor-chromatic-keyboard-label">{key.keyboardKey}</span>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+
+                        <p className="editor-chromatic-note">
+                          Use <strong>A W S E D F T G Y H U J K</strong> for notes and <strong>Z / X</strong> to shift octaves.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+
                   <div className="editor-pad-meta">
-                    <article>
-                      <span className="transport-label">Bank</span>
-                      <strong>{currentBankId}</strong>
-                    </article>
                     <article>
                       <span className="transport-label">Pad</span>
                       <strong>{selectedPad.label}</strong>
                     </article>
                     <article>
-                      <span className="transport-label">Sample</span>
-                      <strong>{selectedPad.sampleName}</strong>
-                    </article>
-                    <article>
-                      <span className="transport-label">Source</span>
-                      <strong>{sourceLabels[selectedPad.sourceType]}</strong>
-                    </article>
-                    <article>
                       <span className="transport-label">File</span>
-                      <strong>{selectedPad.sampleFile}</strong>
+                      <strong title={selectedPad.sampleFile}>{selectedPad.sampleFile}</strong>
                     </article>
-                    <article>
-                      <span className="transport-label">Waveform</span>
-                      <strong>{activeWaveformStatus === 'loading' ? 'Decoding' : activeWaveformStatus === 'ready' ? 'Ready' : activeWaveformStatus === 'error' ? 'Error' : 'Idle'}</strong>
-                    </article>
-                  </div>
-
-                  <div className="playback-mode-group editor-playback-mode-group">
-                    <div className="editor-playback-mode-radios" role="radiogroup" aria-label="Playback mode">
-                      {(['one-shot', 'gate-loop', 'gate', 'loop'] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          role="radio"
-                          aria-checked={playbackMode === mode}
-                          className={playbackMode === mode ? 'playback-mode-button is-current' : 'playback-mode-button'}
-                          onClick={() => updatePlaybackMode(selectedPad.id, mode)}
-                        >
-                          {mode}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      type="button"
-                      aria-pressed={isPadReversed}
-                      className={isPadReversed ? 'playback-mode-button is-current' : 'playback-mode-button'}
-                      onClick={() => togglePadReverse(selectedPad.id)}
-                    >
-                      Reverse
-                    </button>
-                  </div>
-
-                  <div className="trim-controls editor-trim-controls">
-                    <div className="trim-control">
-                      <span>Pitch</span>
-                      <Slider.Root
-                        className="trim-slider-root single-thumb"
-                        min={-12}
-                        max={12}
-                        step={1}
-                        value={[semitoneOffset]}
-                        onValueChange={([value]) => updateSemitoneOffset(selectedPad.id, value)}
-                      >
-                        <Slider.Track className="trim-slider-track">
-                          <Slider.Range className="trim-slider-range" />
-                        </Slider.Track>
-                        <Slider.Thumb className="trim-slider-thumb" aria-label="Pitch" />
-                      </Slider.Root>
-                      <div className="trim-readout single-value">
-                        <strong>{semitoneOffset > 0 ? '+' : ''}{semitoneOffset} st</strong>
-                      </div>
-                    </div>
-
-                    <div className="trim-control">
-                      <span>Gain</span>
-                      <Slider.Root
-                        className="trim-slider-root single-thumb"
-                        min={0}
-                        max={1.5}
-                        step={0.01}
-                        value={[padGain]}
-                        onValueChange={([value]) => updatePadGain(selectedPad.id, value)}
-                      >
-                        <Slider.Track className="trim-slider-track">
-                          <Slider.Range className="trim-slider-range" />
-                        </Slider.Track>
-                        <Slider.Thumb className="trim-slider-thumb" aria-label="Gain" />
-                      </Slider.Root>
-                      <div className="trim-readout single-value">
-                        <strong>{padGain.toFixed(2)}</strong>
-                      </div>
-                    </div>
-
-                    <div className="trim-control">
-                      <span>Pan</span>
-                      <Slider.Root
-                        className="trim-slider-root single-thumb"
-                        min={-1}
-                        max={1}
-                        step={0.01}
-                        value={[padPan]}
-                        onValueChange={([value]) => updatePadPan(selectedPad.id, value)}
-                      >
-                        <Slider.Track className="trim-slider-track">
-                          <Slider.Range className="trim-slider-range" />
-                        </Slider.Track>
-                        <Slider.Thumb className="trim-slider-thumb" aria-label="Pan" />
-                      </Slider.Root>
-                      <div className="trim-readout single-value">
-                        <strong>{padPan === 0 ? 'C' : padPan < 0 ? `L ${Math.round(Math.abs(padPan) * 100)}` : `R ${Math.round(padPan * 100)}`}</strong>
-                      </div>
-                    </div>
                   </div>
                 </div>
               ) : null}
-              <div className="work-surface-actions">
-                {editorSource === 'loop' && generatedLoop ? (
-                  <>
+              {editorSource === 'loop' && generatedLoop ? (
+                <div className="editor-loop-footer">
+                  <div className="work-surface-actions editor-loop-actions">
                     <button type="button" className="primary-button" onClick={() => { void toggleLoopPreview() }}>
                       {isLoopPlaying ? 'Stop Loop' : 'Play Loop'}
                     </button>
@@ -3750,7 +4987,15 @@ function App() {
                       }}
                       disabled={!selectedChop}
                     >
-                      {selectedChop ? `Audition ${selectedChop.id.replace('chop-', 'Chop ')}` : 'Select a Chop'}
+                      {selectedChop ? `Audition ${formatChopRegionLabel(selectedChop.id)}` : 'Select a Chop'}
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={resetLoopChops}
+                      disabled={loopChopRegions.length === 0}
+                    >
+                      Reset Chops
                     </button>
                     <label className="bank-load-field">
                       <select value={loopTargetBankId} onChange={(event) => setLoopTargetBankId(event.target.value as BankId)}>
@@ -3769,9 +5014,24 @@ function App() {
                     >
                       Add to Bank
                     </button>
-                  </>
-                ) : null}
-              </div>
+                  </div>
+
+                  <div className="editor-loop-meta">
+                    <div className="editor-loop-focus">
+                      <span className="transport-label">Selected Chop</span>
+                      <strong>{selectedChop ? formatChopRegionLabel(selectedChop.id) : 'None'}</strong>
+                      <span>
+                        {selectedChop && selectedChopDurationSeconds !== null
+                          ? `${selectedChop.start.toFixed(2)}s-${selectedChop.end.toFixed(2)}s · ${selectedChopDurationSeconds.toFixed(2)}s`
+                          : 'Click a slice to audition it.'}
+                      </span>
+                    </div>
+                    <p className="editor-loop-tip">
+                      Drag the divider lines in the waveform to resize slices before you load the loop into a bank.
+                    </p>
+                  </div>
+                </div>
+              ) : null}
             </>
           </div>
         ) : workView === 'mixer' ? (
@@ -3832,6 +5092,24 @@ function App() {
                     </Slider.Track>
                     <Slider.Thumb className="trim-slider-thumb" aria-label="Master volume" />
                   </Slider.Root>
+                </div>
+                <div className="mixer-strip mixer-export-strip">
+                  <span className="transport-label">Sequence</span>
+                  <div className="mixer-export-panel">
+                    <button
+                      type="button"
+                      className="secondary-button mixer-export-button"
+                      onClick={() => {
+                        void exportSequenceClip()
+                      }}
+                      disabled={isExportingSequence}
+                    >
+                      <Download size={15} strokeWidth={2.1} aria-hidden="true" />
+                      <span>{isExportingSequence ? 'Rendering...' : 'Export WAV'}</span>
+                    </button>
+                    <p className="mixer-export-note">{sequenceExportMessage}</p>
+                  </div>
+                  <span className="mixer-export-caption">All audible banks</span>
                 </div>
               </div>
             </div>
@@ -4104,6 +5382,7 @@ function App() {
                         </div>
                         {Array.from({ length: currentSequenceLength }, (_, stepIndex) => {
                           const isActive = currentStepPattern[pad.id]?.[stepIndex] ?? false
+                          const stepSemitoneOffset = currentStepSemitoneOffsets[pad.id]?.[stepIndex] ?? 0
                           const isCurrentStep = sequencePlayheadStep === stepIndex
                           const isQuarter = stepIndex % 4 === 0
                           const className = isActive
@@ -4124,8 +5403,15 @@ function App() {
                               type="button"
                               aria-pressed={isActive}
                               className={className}
+                              title={isActive
+                                ? `${pad.label} step ${stepIndex + 1}${stepSemitoneOffset === 0 ? ' (root)' : ` (${formatSemitoneOffsetLabel(stepSemitoneOffset)})`}`
+                                : `Toggle step ${stepIndex + 1} for ${pad.label}`}
                               onClick={() => toggleSequenceStep(pad.id, stepIndex)}
-                            />
+                            >
+                              {isActive && stepSemitoneOffset !== 0 ? (
+                                <span className="sequencer-step-note">{stepSemitoneOffset > 0 ? `+${stepSemitoneOffset}` : String(stepSemitoneOffset)}</span>
+                              ) : null}
+                            </button>
                           )
                         })}
                       </Fragment>
@@ -4140,8 +5426,22 @@ function App() {
 
       <section className="workspace">
         <section className="pads panel">
-          <div className="panel-heading">
+          <div className="panel-heading pads-panel-heading">
             <p className="panel-kicker">Pads</p>
+            <button
+              type="button"
+              className={
+                'secondary-button midi-toggle-button' +
+                (isMidiPanelOpen ? ' is-open' : '') +
+                (selectedMidiInputId ? ' is-live' : '')
+              }
+              aria-expanded={isMidiPanelOpen}
+              aria-controls="pads-midi-panel"
+              onClick={toggleMidiPanel}
+            >
+              <span className={selectedMidiInputId ? 'midi-toggle-indicator is-live' : 'midi-toggle-indicator'} aria-hidden="true" />
+              <span>MIDI</span>
+            </button>
           </div>
 
           <div className="bank-switcher" aria-label="Pad banks">
@@ -4161,29 +5461,118 @@ function App() {
             </div>
           </div>
 
+          {isMidiPanelOpen ? (
+            <div className="midi-panel" id="pads-midi-panel">
+              <div className="midi-panel-header">
+                <div className="midi-panel-title">
+                  <span className="transport-label">MIDI Input</span>
+                  <strong>
+                    {midiAccessState === 'connecting'
+                      ? 'Requesting Access'
+                      : selectedMidiInputId
+                        ? availableMidiInputs.find((input) => input.id === selectedMidiInputId)?.name ?? 'Controller Ready'
+                        : midiSupported
+                          ? 'Not Connected'
+                          : 'Unsupported'}
+                  </strong>
+                </div>
+                <button
+                  type="button"
+                  className={midiAccessState === 'ready' ? 'secondary-button midi-connect-button' : 'primary-button midi-connect-button'}
+                  onClick={() => {
+                    void enableMidiInput()
+                  }}
+                  disabled={midiAccessState === 'connecting'}
+                >
+                  {midiAccessState === 'connecting' ? 'Connecting...' : midiAccessState === 'ready' ? 'Rescan MIDI' : 'Enable MIDI'}
+                </button>
+              </div>
+
+              <div className="midi-panel-controls">
+                <label className="midi-device-field">
+                  <span className="transport-label">Device</span>
+                  <select
+                    value={selectedMidiInputId ?? ''}
+                    onChange={(event) => handleMidiInputSelection(event.target.value || null)}
+                    disabled={!midiSupported || availableMidiInputs.length === 0}
+                  >
+                    {availableMidiInputs.length === 0 ? (
+                      <option value="">No MIDI inputs</option>
+                    ) : (
+                      availableMidiInputs.map((input) => (
+                        <option key={input.id} value={input.id}>
+                          {input.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+
+                <div className="midi-panel-flags">
+                  <span className={selectedMidiInputId ? 'midi-panel-flag is-active' : 'midi-panel-flag'}>
+                    {selectedMidiInputId ? 'Live' : 'Idle'}
+                  </span>
+                  {midiLearnPadId ? (
+                    <button
+                      type="button"
+                      className="secondary-button midi-learn-cancel"
+                      onClick={cancelMidiLearn}
+                    >
+                      Cancel Learn
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+
+              <p className="midi-panel-note">{midiPanelMessage}</p>
+            </div>
+          ) : null}
+
           <div className="pad-grid" aria-label="Sample pad grid">
-            {currentBankPads.map((pad) => (
-              <button
-                key={pad.id}
-                type="button"
-                className={
-                  'pad pad-' +
-                  pad.group +
-                  (selectedPad.id === pad.id ? ' is-selected' : '') +
-                  (activePadIds.includes(pad.id) ? ' is-active' : '')
-                }
-                aria-pressed={selectedPad.id === pad.id}
-                onPointerDown={() => triggerPad(pad.id)}
-                onPointerUp={() => releasePad(pad.id)}
-                onPointerLeave={() => releasePad(pad.id)}
-                onBlur={() => releasePad(pad.id)}
-              >
-                <span className="pad-key">{pad.keyTrigger}</span>
-                <span className="pad-group">{groupLabels[pad.group]}</span>
-                <strong>{pad.label}</strong>
-                <span className="pad-sample">{pad.sampleName}</span>
-              </button>
-            ))}
+            {currentBankPads.map((pad) => {
+              const isMidiLearningPad = midiLearnPadId === pad.id
+              const midiNoteNumber = midiPadNoteMappings[pad.id]
+
+              return (
+                <div key={pad.id} className={isMidiLearningPad ? 'pad-tile is-midi-learning' : 'pad-tile'}>
+                  <button
+                    type="button"
+                    className={
+                      'pad pad-' +
+                      pad.group +
+                      (selectedPad.id === pad.id ? ' is-selected' : '') +
+                      (activePadIds.includes(pad.id) ? ' is-active' : '') +
+                      (isMidiLearningPad ? ' is-midi-learning' : '')
+                    }
+                    aria-pressed={selectedPad.id === pad.id}
+                    onPointerDown={() => triggerPad(pad.id)}
+                    onPointerUp={() => releasePad(pad.id)}
+                    onPointerLeave={() => releasePad(pad.id)}
+                    onBlur={() => releasePad(pad.id)}
+                  >
+                    <span className="pad-key">{pad.keyTrigger}</span>
+                    <span className="pad-group">{groupLabels[pad.group]}</span>
+                    <strong>{pad.label}</strong>
+                    <span className="pad-sample">{pad.sampleName}</span>
+                  </button>
+                  {isMidiEnabled ? (
+                    <button
+                      type="button"
+                      className={isMidiLearningPad ? 'pad-midi-badge is-learning' : 'pad-midi-badge'}
+                      aria-pressed={isMidiLearningPad}
+                      onClick={() => toggleMidiLearnForPad(pad)}
+                      disabled={!midiSupported}
+                      title={isMidiLearningPad
+                        ? `Press a MIDI note to map ${pad.label}.`
+                        : `Map a MIDI note to ${pad.label}. Current note: ${formatMidiNoteLabel(midiNoteNumber)}.`}
+                    >
+                      <span>MIDI</span>
+                      <strong>{isMidiLearningPad ? 'Press Note' : formatMidiNoteLabel(midiNoteNumber)}</strong>
+                    </button>
+                  ) : null}
+                </div>
+              )
+            })}
           </div>
         </section>
 
@@ -4194,7 +5583,7 @@ function App() {
           </div>
 
           <label className="prompt-field">
-            <span>Describe a drum kit, one-shot, or loop</span>
+            <span>Describe a drum kit or loop</span>
             <textarea
               placeholder="Try: gritty Memphis kit with blown-out snares and a short sub kick"
               rows={5}
@@ -4219,22 +5608,6 @@ function App() {
               disabled={generationStatus === 'generating'}
             >
               {generationStatus === 'generating' && generationMode === 'loop' ? 'Generating...' : 'Generate Loop'}
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void generateAudio('pad')}
-              disabled={generationStatus === 'generating'}
-            >
-              {generationStatus === 'generating' && generationMode === 'pad' ? 'Generating...' : 'Generate Pad'}
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void generateAudio('pad')}
-              disabled={generationStatus === 'generating'}
-            >
-              Regenerate Pad
             </button>
           </div>
 

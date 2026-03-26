@@ -35,6 +35,15 @@ type DecodedWaveform = {
 const baseRegionClass = 'sample-waveform__region'
 const selectedRegionClass = 'sample-waveform__region is-selected'
 
+const getRegionLabel = (region: WaveformRegion, index: number) => {
+  const match = region.id.match(/(\d+)$/)
+  if (match) {
+    return `Chop ${match[1].padStart(2, '0')}`
+  }
+
+  return `Slice ${String(index + 1).padStart(2, '0')}`
+}
+
 const buildSamplePeaks = (channelData: Float32Array[], sampleCount = 960) => {
   const primary = channelData[0]
   if (!primary || primary.length === 0) {
@@ -490,17 +499,20 @@ export function SampleWaveform({
       />
       {regions.length > 0 ? (
         <div ref={regionsOverlayRef} className="sample-waveform__regions" aria-hidden="true">
-          {regions.map((region) => {
+          {regions.map((region, index) => {
             const left = regionDurationSeconds > 0 ? (region.start / regionDurationSeconds) * 100 : 0
             const width = regionDurationSeconds > 0 ? ((region.end - region.start) / regionDurationSeconds) * 100 : 0
+            const regionLabel = getRegionLabel(region, index)
             return (
               <button
                 key={region.id}
                 type="button"
                 className={region.id === selectedRegionId ? selectedRegionClass : baseRegionClass}
                 style={{ left: `${left}%`, width: `${width}%` }}
+                title={`${regionLabel}: ${region.start.toFixed(2)}s-${region.end.toFixed(2)}s. Click to audition and drag the dividers to resize.`}
                 onClick={() => onRegionSelect?.(region)}
               >
+                <span className="sample-waveform__region-label">{regionLabel}</span>
                 <span className="sample-waveform__region-handle sample-waveform__region-handle--start" data-region-handle="start" data-region-id={region.id} />
                 <span className="sample-waveform__region-handle sample-waveform__region-handle--end" data-region-handle="end" data-region-id={region.id} />
               </button>
