@@ -601,7 +601,7 @@ button:active:not(:disabled) {
 }
 
 .mixer-surface {
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .mixer-section {
@@ -616,6 +616,9 @@ button:active:not(:disabled) {
 
 .mixer-section-heading strong {
   color: var(--text-strong);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .mixer-section-heading .bank-buttons {
@@ -627,7 +630,6 @@ button:active:not(:disabled) {
   align-items: center;
   justify-content: flex-start;
   gap: 0.9rem;
-  /* flex-wrap: wrap; */
 }
 
 .mixer-bank-buttons {
@@ -637,15 +639,15 @@ button:active:not(:disabled) {
 .mixer-bank-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.5rem;
+  gap: 0.35rem;
   align-items: start;
 }
 
 .mixer-pad-grid {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
-  column-gap: 0.5rem;
-  row-gap: 1.25rem;
+  column-gap: 0.35rem;
+  row-gap: 1rem;
   max-height: 28rem;
   overflow-y: auto;
   padding-right: 0.4rem;
@@ -654,12 +656,16 @@ button:active:not(:disabled) {
 
 .mixer-strip {
   display: grid;
-  grid-template-rows: auto minmax(8.5rem, 8.5rem) auto;
+  grid-template-rows: auto minmax(9rem, 9rem) auto;
   justify-items: center;
   align-content: start;
   align-items: start;
   gap: 0;
   min-width: 0;
+  padding: 0.5rem 0.2rem 0.4rem;
+  border-radius: 6px;
+  background: oklch(0.90 0.008 70);
+  border: 1px solid oklch(0.82 0.012 65);
 }
 
 .mixer-strip .trim-slider-root.vertical {
@@ -672,15 +678,16 @@ button:active:not(:disabled) {
   align-items: center;
   justify-content: center;
   min-height: 1.5rem;
+  padding-top: 0.15rem;
 }
 
 .mixer-action-button {
-  padding: 0.16rem 0.34rem;
+  padding: 0.18rem 0.38rem;
   font-size: 0.58rem;
 }
 
 .mixer-export-strip {
-  grid-template-rows: auto minmax(8.5rem, 8.5rem) auto;
+  grid-template-rows: auto minmax(9rem, 9rem) auto;
 }
 
 .mixer-export-panel {
@@ -691,9 +698,8 @@ button:active:not(:disabled) {
   align-content: center;
   gap: 0.65rem;
   padding: 0.7rem;
-  border: 1px solid var(--panel-border);
-  border-radius: 0.75rem;
-  background: color-mix(in oklch, var(--panel-bg) 90%, white);
+  border-radius: 0.5rem;
+  background: oklch(0.86 0.008 70);
 }
 
 .mixer-export-button {
@@ -725,7 +731,7 @@ button:active:not(:disabled) {
   width: 100%;
   max-width: 11rem;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -734,7 +740,7 @@ button:active:not(:disabled) {
 }
 
 .pad-strip {
-  grid-template-rows: auto minmax(8.5rem, 8.5rem) auto auto;
+  grid-template-rows: auto minmax(9rem, 9rem) auto auto;
   row-gap: 0.28rem;
 }
 
@@ -742,19 +748,45 @@ button:active:not(:disabled) {
   width: min(78px, 100%);
   padding: 0.08rem 0 0;
   justify-items: center;
-  gap: 0.3rem;
+  gap: 0.2rem;
 }
 
 .mixer-pan-control > span {
-  font-size: 0.54rem;
+  font-size: 0.5rem;
   line-height: 1;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
 }
 
 .mixer-pan-slider {
   width: 100%;
 }
 
+.mixer-pan-slider .trim-slider-track {
+  height: 3px;
+  border-radius: 1.5px;
+  background: oklch(0.78 0.01 65);
+}
+
+.mixer-pan-slider .trim-slider-range {
+  background: oklch(0.50 0.06 55);
+}
+
+.mixer-pan-slider .trim-slider-thumb {
+  width: 10px;
+  height: 10px;
+  border-width: 1.5px;
+  border-color: oklch(0.50 0.06 55);
+}
+
+.mixer-strip .transport-label {
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  color: var(--text-strong);
+  padding-bottom: 0.2rem;
+}
 
 .pad-strip .transport-label {
   max-width: 100%;
@@ -829,10 +861,11 @@ button:active:not(:disabled) {
 }
 
 .editor-pad-controls.is-chromatic-active {
-  grid-template-columns: max-content 30rem;
+  grid-template-columns: max-content minmax(0, 30rem);
   grid-template-areas:
-    "modes modes"
+    "modes keys"
     "sliders keys";
+  align-items: start;
 }
 
 .editor-pad-meta {
@@ -909,7 +942,7 @@ button:active:not(:disabled) {
   justify-self: stretch;
   display: grid;
   gap: 0.55rem;
-  padding: 0.7rem 0.8rem 0.8rem;
+  padding: 0 0.8rem 0.8rem;
   border: none;
   border-radius: 1rem;
   background: transparent;
@@ -921,6 +954,26 @@ button:active:not(:disabled) {
   justify-content: space-between;
   gap: 0.55rem 0.85rem;
   flex-wrap: wrap;
+}
+
+.editor-arp-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.arp-select {
+  border: 1px solid var(--panel-border);
+  background: color-mix(in oklch, var(--panel-bg) 92%, white);
+  color: var(--text-strong);
+  padding: 0.32rem 0.4rem;
+  font-size: 0.72rem;
+  min-width: 3.8rem;
+}
+
+.editor-arp-controls .playback-mode-button {
+  font-size: 0.72rem;
+  padding: 0.32rem 0.65rem;
 }
 
 .editor-chromatic-heading {
@@ -1614,6 +1667,10 @@ button:active:not(:disabled) {
   background: oklch(0.96 0.012 20);
 }
 
+.pad-chop {
+  background: oklch(0.96 0.012 70);
+}
+
 .pad-midi-badge {
   display: flex;
   align-items: center;
@@ -1749,6 +1806,70 @@ button:active:not(:disabled) {
   width: 100%;
 }
 
+/* Mixer fader overrides — recessed channel with wide rectangular thumb */
+.mixer-strip .trim-slider-root.vertical {
+  width: 28px;
+  height: 9rem;
+  padding-block: 14px;
+}
+
+.mixer-strip .trim-slider-track[data-orientation="vertical"] {
+  width: 6px;
+  border-radius: 3px;
+  background: oklch(0.30 0.02 55);
+  box-shadow: inset 0 1px 3px oklch(0 0 0 / 0.35);
+}
+
+.mixer-strip .trim-slider-range[data-orientation="vertical"] {
+  border-radius: 3px;
+  background: linear-gradient(to top, oklch(0.58 0.15 38), oklch(0.65 0.14 50));
+}
+
+.mixer-strip .trim-slider-thumb {
+  width: 24px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid oklch(0.60 0.02 60);
+  background: linear-gradient(to bottom, oklch(0.98 0 0), oklch(0.88 0.005 65));
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
+  cursor: grab;
+  transition: box-shadow 0.12s, background 0.12s;
+}
+
+.mixer-strip .trim-slider-thumb::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 5px;
+  right: 5px;
+  height: 1px;
+  background: oklch(0.65 0.02 60);
+  transform: translateY(-0.5px);
+}
+
+.mixer-strip .trim-slider-thumb:hover {
+  background: linear-gradient(to bottom, oklch(1 0 0), oklch(0.92 0.005 65));
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.22), 0 0 0 2px oklch(0.58 0.15 38 / 0.15);
+}
+
+.mixer-strip .trim-slider-thumb:focus-visible {
+  outline: none;
+  box-shadow: 0 1px 4px oklch(0 0 0 / 0.22), 0 0 0 2px oklch(0.58 0.15 38 / 0.3);
+}
+
+.mixer-strip .trim-slider-thumb:active {
+  cursor: grabbing;
+}
+
+.mixer-master-strip {
+  background: oklch(0.87 0.012 55);
+  border-color: oklch(0.78 0.015 50);
+}
+
+.mixer-master-strip .trim-slider-range[data-orientation="vertical"] {
+  background: linear-gradient(to top, oklch(0.62 0.16 45), oklch(0.72 0.12 70));
+}
+
 .trim-control strong {
   color: var(--text-strong);
 }
@@ -1794,6 +1915,59 @@ button:active:not(:disabled) {
   color: var(--text-strong);
   padding: 0.42rem 0.55rem;
   min-width: 6rem;
+}
+
+.sequence-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.85rem;
+}
+
+.sequence-selector-buttons {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.sequence-index-button {
+  min-width: 1.85rem;
+  height: 1.85rem;
+  padding: 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: oklch(1 0 0 / 0.4);
+  color: var(--text-muted);
+  box-shadow: inset 0 0 0 1px oklch(0.5 0.02 60 / 0.15);
+}
+
+.sequence-index-button:hover:not(.is-active) {
+  background: oklch(1 0 0 / 0.65);
+  color: var(--text-strong);
+}
+
+.sequence-index-button.is-active {
+  background: linear-gradient(180deg, var(--accent-warm), oklch(0.5 0.12 35));
+  color: oklch(0.98 0.01 80);
+  box-shadow:
+    0 1px 3px oklch(0.3 0.08 38 / 0.2),
+    inset 0 1px 0 oklch(1 0 0 / 0.1);
+}
+
+.sequence-add-button {
+  min-width: 1.85rem;
+  height: 1.85rem;
+  padding: 0 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: oklch(1 0 0 / 0.25);
+  color: var(--text-muted);
+  box-shadow: inset 0 0 0 1px oklch(0.5 0.02 60 / 0.1);
+}
+
+.sequence-add-button:hover {
+  background: oklch(1 0 0 / 0.5);
+  color: var(--text-strong);
 }
 
 .sequencer-generate-bar {

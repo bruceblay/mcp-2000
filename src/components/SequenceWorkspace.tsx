@@ -1,6 +1,6 @@
 import { Fragment } from 'react'
 import { Dices } from 'lucide-react'
-import { bankIds, type BankId, type BankState, type GenerationStatus, type SequenceGenerationAction } from '../types'
+import { bankIds, type BankId, type GenerationStatus, type SequenceGenerationAction } from '../types'
 import type { Pad } from '../mock-kit'
 import { sequenceLengthOptions } from '../constants'
 import { formatSemitoneOffsetLabel } from '../format-utils'
@@ -17,6 +17,8 @@ type SequenceWorkspaceProps = {
   currentSequenceMuted: Record<string, boolean>
   sequencePlayheadStep: number | null
   selectedPad: Pad
+  sequenceCount: number
+  activeSequenceIndex: number
   onPromptChange: (value: string) => void
   onGenerateSequence: () => void
   onRandomizeSequence: () => void
@@ -28,6 +30,8 @@ type SequenceWorkspaceProps = {
   onReleasePad: (padId: string) => void
   onToggleStep: (padId: string, stepIndex: number) => void
   onTogglePadMute: (padId: string) => void
+  onSwitchSequence: (index: number) => void
+  onAddSequence: () => void
 }
 
 export function SequenceWorkspace({
@@ -42,6 +46,8 @@ export function SequenceWorkspace({
   currentSequenceMuted,
   sequencePlayheadStep,
   selectedPad,
+  sequenceCount,
+  activeSequenceIndex,
   onPromptChange,
   onGenerateSequence,
   onRandomizeSequence,
@@ -53,6 +59,8 @@ export function SequenceWorkspace({
   onReleasePad,
   onToggleStep,
   onTogglePadMute,
+  onSwitchSequence,
+  onAddSequence,
 }: SequenceWorkspaceProps) {
   return (
     <div className="work-surface sequencer-surface" aria-label="Sequence workspace">
@@ -127,6 +135,32 @@ export function SequenceWorkspace({
               Bank {bankId}
             </button>
           ))}
+        </div>
+      </div>
+
+      <div className="sequence-selector" aria-label="Sequence selector">
+        <span className="transport-label">Sequence</span>
+        <div className="sequence-selector-buttons">
+          {Array.from({ length: sequenceCount }, (_, index) => (
+            <button
+              key={`seq-${index}`}
+              type="button"
+              className={activeSequenceIndex === index ? 'sequence-index-button is-active' : 'sequence-index-button'}
+              onClick={() => onSwitchSequence(index)}
+            >
+              {index + 1}
+            </button>
+          ))}
+          {sequenceCount < 8 && (
+            <button
+              type="button"
+              className="sequence-add-button"
+              onClick={onAddSequence}
+              title="Add a new blank sequence"
+            >
+              +
+            </button>
+          )}
         </div>
       </div>
 

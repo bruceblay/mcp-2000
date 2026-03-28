@@ -10,6 +10,8 @@ export type GenerationMode = 'kit' | 'pad' | 'loop'
 export type SequenceGenerationAction = 'generate' | 'randomize'
 export type MicCaptureState = 'idle' | 'requesting' | 'recording' | 'processing' | 'ready' | 'error'
 export type WorkView = 'editor' | 'sequence' | 'mixer' | 'effects'
+export type ArpMode = 'up' | 'down' | 'up-down' | 'random' | 'order'
+export type ArpDivision = '1/4' | '1/8' | '1/16' | '1/32' | '1/4T' | '1/8T'
 export type EditorSource = 'pad' | 'loop'
 export type PlaybackMode = 'one-shot' | 'loop' | 'gate' | 'gate-loop'
 
@@ -108,14 +110,19 @@ export type PadPlaybackSetting = {
   reversed: boolean
 }
 
-export type BankState = {
-  pads: import('./mock-kit').Pad[]
-  selectedPadId: string
-  playbackSettings: Record<string, PadPlaybackSetting>
+export type Sequence = {
   sequenceLength: number
   stepPattern: Record<string, boolean[]>
   stepSemitoneOffsets: Record<string, number[]>
   sequenceMuted: Record<string, boolean>
+}
+
+export type BankState = {
+  pads: import('./mock-kit').Pad[]
+  selectedPadId: string
+  playbackSettings: Record<string, PadPlaybackSetting>
+  sequences: Sequence[]
+  activeSequenceIndex: number
 }
 
 export type ChromaticKeyDefinition = {

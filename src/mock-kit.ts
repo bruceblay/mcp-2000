@@ -1,4 +1,4 @@
-export type PadGroup = 'drums' | 'textures' | 'melodic' | 'fx'
+export type PadGroup = 'drums' | 'textures' | 'melodic' | 'fx' | 'chop'
 export type PadSourceType = 'generated' | 'uploaded' | 'resampled'
 
 export type Pad = {

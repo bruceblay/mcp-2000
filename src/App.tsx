@@ -1,6 +1,7 @@
 import { Fragment, startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Circle, Dices, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import * as Slider from '@radix-ui/react-slider'
+import { AnimatePresence, motion } from 'framer-motion'
 import { type BankKitId, type Pad, type PadSourceType } from './mock-kit'
 import { starterBankPads } from './kit-generation'
 import { SampleWaveform, type WaveformRegion } from './components/sample-waveform'
@@ -9,7 +10,7 @@ import {
   loopChopCount, midiStorageKey, midiSelectedInputStorageKey,
   promptPresets, groupLabels, chromaticBaseOctave, chromaticMinOctave, chromaticMaxOctave,
   chromaticKeyLayout, chromaticKeyboardMap, sequenceLengthOptions, sequenceLookaheadMs,
-  sequenceScheduleAheadSeconds, supportedGlobalEffectIds,
+  sequenceScheduleAheadSeconds, supportedGlobalEffectIds, arpDivisionOptions, arpModeOptions,
 } from './constants'
 import {
   bankIds,
@@ -17,7 +18,8 @@ import {
   type MicCaptureState, type WorkView, type EditorSource, type PlaybackMode, type RecordedTake, type GeneratedLoop,
   type EditorTransformResponse, type ChopRegion, type BitcrusherProcessorNode, type ActiveEffectRuntime,
   type ActivePadAudio, type ActiveChromaticNoteAudio, type ActiveLoopPlayback, type MidiPadNoteMappings,
-  type NavigatorWithMidi, type PadPlaybackSetting, type BankState,
+  type NavigatorWithMidi, type PadPlaybackSetting, type BankState, type Sequence,
+  type ArpMode, type ArpDivision,
 } from './types'
 import {
   clamp, buildDistortionCurve, buildImpulseResponse, createReversedBuffer,
@@ -31,7 +33,8 @@ import { formatEffectParamValue, formatClockDuration, formatChopRegionLabel, for
 import { getChromaticRelativeSemitone, getChromaticNoteLabel, buildChromaticNoteId } from './chromatic-utils'
 import {
   createInitialBankMixerGains, createInitialBankToggleState, getEffectiveBankGain,
-  createInitialBanksState, readStoredMidiPadMappings, readStoredMidiInputId,
+  createInitialBanksState, createInitialSequence, getActiveSequence,
+  readStoredMidiPadMappings, readStoredMidiInputId,
 } from './state-init'
 import { createGlobalEffectRouting } from './effects-routing'
 import { EffectsWorkspace } from './components/EffectsWorkspace'
@@ -82,6 +85,10 @@ function App() {
   const [isChromaticModeActive, setIsChromaticModeActive] = useState(false)
   const [chromaticOctave, setChromaticOctave] = useState(chromaticBaseOctave)
   const [activeChromaticNoteIds, setActiveChromaticNoteIds] = useState<string[]>([])
+  const [isArpEnabled, setIsArpEnabled] = useState(false)
+  const [isArpLatched, setIsArpLatched] = useState(false)
+  const [arpDivision, setArpDivision] = useState<ArpDivision>('1/8')
+  const [arpMode, setArpMode] = useState<ArpMode>('up')
   const [isRecordArmed, setIsRecordArmed] = useState(false)
   const [isSequencePlaying, setIsSequencePlaying] = useState(false)
   const [sequencePlayheadStep, setSequencePlayheadStep] = useState<number | null>(null)
@@ -107,6 +114,12 @@ function App() {
   const activePadSourcesRef = useRef<Map<string, ActivePadAudio>>(new Map())
   const activeChromaticNotesRef = useRef<Map<string, ActiveChromaticNoteAudio>>(new Map())
   const pressedChromaticKeysRef = useRef<Map<string, string>>(new Map())
+  const arpIntervalRef = useRef<number | null>(null)
+  const arpHeldSemitonesRef = useRef<number[]>([])
+  const arpPhysicalHeldCountRef = useRef(0)
+  const arpStepIndexRef = useRef(0)
+  const arpDirectionRef = useRef<1 | -1>(1)
+  const arpActiveNoteIdRef = useRef<string | null>(null)
   const activeEffectRuntimeRef = useRef<ActiveEffectRuntime | null>(null)
   const activeLoopPlaybackRef = useRef<ActiveLoopPlayback | null>(null)
   const loopPlaybackIdRef = useRef(0)
@@ -140,10 +153,11 @@ function App() {
 
   const currentBankState = bankStates[currentBankId]
   const currentBankPads = currentBankState.pads
-  const currentSequenceLength = currentBankState.sequenceLength
-  const currentStepPattern = currentBankState.stepPattern
-  const currentStepSemitoneOffsets = currentBankState.stepSemitoneOffsets
-  const currentSequenceMuted = currentBankState.sequenceMuted
+  const currentSequence = getActiveSequence(currentBankState)
+  const currentSequenceLength = currentSequence.sequenceLength
+  const currentStepPattern = currentSequence.stepPattern
+  const currentStepSemitoneOffsets = currentSequence.stepSemitoneOffsets
+  const currentSequenceMuted = currentSequence.sequenceMuted
   const selectedPad = useMemo(
     () => currentBankPads.find((pad) => pad.id === currentBankState.selectedPadId) ?? currentBankPads[0],
     [currentBankPads, currentBankState.selectedPadId],
@@ -225,6 +239,14 @@ function App() {
         ephemeralAudioUrlsRef.current.delete(url)
       }
     }
+
+    for (const url of bufferMapRef.current.keys()) {
+      if (!referencedUrls.has(url)) {
+        bufferMapRef.current.delete(url)
+        reversedBufferMapRef.current.delete(url)
+      }
+    }
+    setLoadedPadCount(bufferMapRef.current.size)
   }, [allPads, generatedLoop?.sampleUrl, recordedTake?.previewUrl])
 
   useEffect(() => {
@@ -387,6 +409,10 @@ function App() {
       }
       activeChromaticNotesRef.current.clear()
       pressedChromaticKeysRef.current.clear()
+      arpHeldSemitonesRef.current = []
+      if (arpIntervalRef.current !== null) {
+        window.clearInterval(arpIntervalRef.current)
+      }
 
       const activeLoopPlayback = activeLoopPlaybackRef.current
       if (activeLoopPlayback) {
@@ -1192,13 +1218,14 @@ function App() {
       throw new Error('Unmute at least one bank before exporting the sequence.')
     }
 
-    const scheduledPads = audibleBanks.flatMap(({ bankId, bankState, bankGain }) => (
-      bankState.pads.flatMap((pad) => {
-        const steps = bankState.stepPattern[pad.id] ?? []
-        const stepSemitoneOffsets = bankState.stepSemitoneOffsets[pad.id] ?? []
+    const scheduledPads = audibleBanks.flatMap(({ bankId, bankState, bankGain }) => {
+      const seq = getActiveSequence(bankState)
+      return bankState.pads.flatMap((pad) => {
+        const steps = seq.stepPattern[pad.id] ?? []
+        const stepSemitoneOffsets = seq.stepSemitoneOffsets[pad.id] ?? []
         const playbackSettings = bankState.playbackSettings[pad.id]
 
-        if (!playbackSettings || bankState.sequenceMuted[pad.id] || !steps.some(Boolean)) {
+        if (!playbackSettings || seq.sequenceMuted[pad.id] || !steps.some(Boolean)) {
           return []
         }
 
@@ -1209,10 +1236,10 @@ function App() {
           playbackSettings,
           steps,
           stepSemitoneOffsets,
-          sequenceLength: bankState.sequenceLength,
+          sequenceLength: seq.sequenceLength,
         }]
       })
-    ))
+    })
 
     if (scheduledPads.length === 0) {
       throw new Error('Program at least one audible step before exporting the sequence.')
@@ -1675,6 +1702,7 @@ function App() {
       selectedPadId: selectedPad.id,
     }))
 
+    workViewDirectionRef.current = 'expand'
     setWorkView('editor')
     setEditorSource('pad')
     setMicCaptureMessage(`Loaded the take into ${selectedPad.label}. You can trim or play it from the pad now.`)
@@ -1697,6 +1725,7 @@ function App() {
       bpm: sequenceTempo,
       sourceType: 'uploaded',
     })
+    workViewDirectionRef.current = 'expand'
     setWorkView('editor')
     setEditorSource('loop')
     setIsLoopPlaying(false)
@@ -1907,6 +1936,9 @@ function App() {
 
   const stopAllChromaticNotes = () => {
     pressedChromaticKeysRef.current.clear()
+    arpHeldSemitonesRef.current = []
+    arpPhysicalHeldCountRef.current = 0
+    stopArp()
 
     for (const noteId of Array.from(activeChromaticNotesRef.current.keys())) {
       stopChromaticNote(noteId)
@@ -2076,7 +2108,7 @@ function App() {
         return
       }
 
-      setSequencePlayheadStep(stepIndex % visibleBank.sequenceLength)
+      setSequencePlayheadStep(stepIndex % getActiveSequence(visibleBank).sequenceLength)
     }, visualDelayMs)
 
     if (isMetronomeEnabled && stepIndex % 4 === 0) {
@@ -2085,23 +2117,28 @@ function App() {
 
     bankIds.forEach((bankId) => {
       const bankState = bankStatesRef.current[bankId]
-      if (!bankState || bankState.sequenceLength <= 0) {
+      if (!bankState) {
         return
       }
 
-      const bankStepIndex = stepIndex % bankState.sequenceLength
+      const seq = getActiveSequence(bankState)
+      if (seq.sequenceLength <= 0) {
+        return
+      }
+
+      const bankStepIndex = stepIndex % seq.sequenceLength
 
       bankState.pads.forEach((pad) => {
-        if (bankState.sequenceMuted[pad.id]) {
+        if (seq.sequenceMuted[pad.id]) {
           return
         }
 
-        const isStepActive = bankState.stepPattern[pad.id]?.[bankStepIndex]
+        const isStepActive = seq.stepPattern[pad.id]?.[bankStepIndex]
         if (!isStepActive) {
           return
         }
 
-        const stepSemitoneOffset = bankState.stepSemitoneOffsets[pad.id]?.[bankStepIndex] ?? 0
+        const stepSemitoneOffset = seq.stepSemitoneOffsets[pad.id]?.[bankStepIndex] ?? 0
         void playPadAudio(pad.id, { when, fromSequence: true, bankId, sequenceSemitoneOffset: stepSemitoneOffset })
 
         if (bankId !== currentBankIdRef.current) {
@@ -2138,14 +2175,19 @@ function App() {
     const context = audioContextRef.current
     const bankState = bankStatesRef.current[bankId]
 
-    if (!isRecordArmed || !isSequencePlaying || !context || !bankState || bankState.sequenceLength <= 0) {
+    if (!isRecordArmed || !isSequencePlaying || !context || !bankState) {
+      return
+    }
+
+    const seq = getActiveSequence(bankState)
+    if (seq.sequenceLength <= 0) {
       return
     }
 
     const stepDurationSeconds = 60 / Math.max(40, sequenceTempoRef.current) / 4
     const elapsedSteps = Math.max(0, (context.currentTime - sequenceStartTimeRef.current) / stepDurationSeconds)
     const quantizedStepIndex = Math.round(elapsedSteps)
-    const targetStepIndex = ((quantizedStepIndex % bankState.sequenceLength) + bankState.sequenceLength) % bankState.sequenceLength
+    const targetStepIndex = ((quantizedStepIndex % seq.sequenceLength) + seq.sequenceLength) % seq.sequenceLength
 
     setBankStates((current) => {
       const bank = current[bankId]
@@ -2153,12 +2195,13 @@ function App() {
         return current
       }
 
-      const existingSteps = [...(bank.stepPattern[padId] ?? Array.from({ length: bank.sequenceLength }, () => false))]
-      const existingOffsets = [...(bank.stepSemitoneOffsets[padId] ?? Array.from({ length: bank.sequenceLength }, () => 0))]
-      while (existingSteps.length < bank.sequenceLength) {
+      const activeSeq = getActiveSequence(bank)
+      const existingSteps = [...(activeSeq.stepPattern[padId] ?? Array.from({ length: activeSeq.sequenceLength }, () => false))]
+      const existingOffsets = [...(activeSeq.stepSemitoneOffsets[padId] ?? Array.from({ length: activeSeq.sequenceLength }, () => 0))]
+      while (existingSteps.length < activeSeq.sequenceLength) {
         existingSteps.push(false)
       }
-      while (existingOffsets.length < bank.sequenceLength) {
+      while (existingOffsets.length < activeSeq.sequenceLength) {
         existingOffsets.push(0)
       }
 
@@ -2169,19 +2212,17 @@ function App() {
       existingSteps[targetStepIndex] = true
       existingOffsets[targetStepIndex] = stepSemitoneOffset
 
+      const updatedSeq = {
+        ...activeSeq,
+        stepPattern: { ...activeSeq.stepPattern, [padId]: existingSteps },
+        stepSemitoneOffsets: { ...activeSeq.stepSemitoneOffsets, [padId]: existingOffsets },
+      }
+      const updatedSequences = [...bank.sequences]
+      updatedSequences[bank.activeSequenceIndex] = updatedSeq
+
       return {
         ...current,
-        [bankId]: {
-          ...bank,
-          stepPattern: {
-            ...bank.stepPattern,
-            [padId]: existingSteps,
-          },
-          stepSemitoneOffsets: {
-            ...bank.stepSemitoneOffsets,
-            [padId]: existingOffsets,
-          },
-        },
+        [bankId]: { ...bank, sequences: updatedSequences },
       }
     })
   })
@@ -2215,6 +2256,13 @@ function App() {
 
   useEffect(() => {
     if (workView === 'editor' && editorSource === 'pad' && isChromaticModeActive) {
+      return
+    }
+
+    // Let a latched arp keep running across view switches
+    if (isArpEnabled && isArpLatched && arpIntervalRef.current !== null) {
+      pressedChromaticKeysRef.current.clear()
+      arpPhysicalHeldCountRef.current = 0
       return
     }
 
@@ -2262,23 +2310,20 @@ function App() {
         return
       }
 
-      const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, chromaticKey.semitoneOffset)
-      const noteId = buildChromaticNoteId(currentBankIdRef.current, selectedPad.id, relativeSemitone)
-      pressedChromaticKeysRef.current.set(key, noteId)
-      recordPadPressToSequence(selectedPad.id, currentBankIdRef.current, relativeSemitone)
-      void playChromaticPadNote(selectedPad.id, relativeSemitone, { bankId: currentBankIdRef.current, noteId })
+      pressedChromaticKeysRef.current.set(key, chromaticKey.semitoneOffset.toString())
+      triggerChromaticKey(chromaticKey.semitoneOffset)
     }
 
     const handleKeyUp = (event: KeyboardEvent) => {
       const key = event.key.toUpperCase()
-      const noteId = pressedChromaticKeysRef.current.get(key)
+      const stored = pressedChromaticKeysRef.current.get(key)
 
-      if (!noteId) {
+      if (stored == null) {
         return
       }
 
       pressedChromaticKeysRef.current.delete(key)
-      releaseChromaticNote(noteId)
+      releaseChromaticKey(Number(stored))
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -2349,6 +2394,15 @@ function App() {
       ...current,
       [currentBankId]: updater(current[currentBankId]),
     }))
+  }
+
+  const updateActiveSequence = (updater: (seq: Sequence) => Sequence) => {
+    updateCurrentBank((bank) => {
+      const updatedSeq = updater(getActiveSequence(bank))
+      const updatedSequences = [...bank.sequences]
+      updatedSequences[bank.activeSequenceIndex] = updatedSeq
+      return { ...bank, sequences: updatedSequences }
+    })
   }
 
   const triggerPadInBank = (padId: string, bankId: BankId) => {
@@ -2561,8 +2615,126 @@ function App() {
     setIsMidiPanelOpen(nextIsOpen)
   }
 
+  const getArpStepMs = () => {
+    const division = arpDivisionOptions.find((d) => d.value === arpDivision) ?? arpDivisionOptions[1]
+    return (60_000 / Math.max(40, sequenceTempo)) * division.beatFraction
+  }
+
+  const getNextArpSemitone = useEffectEvent(() => {
+    const held = arpHeldSemitonesRef.current
+    if (held.length === 0) return null
+    if (held.length === 1) return held[0]
+
+    const sorted = [...held].sort((a, b) => a - b)
+    const mode = arpMode
+
+    if (mode === 'random') {
+      return sorted[Math.floor(Math.random() * sorted.length)]
+    }
+
+    if (mode === 'order') {
+      const index = arpStepIndexRef.current % held.length
+      arpStepIndexRef.current = index + 1
+      return held[index]
+    }
+
+    if (mode === 'up') {
+      const index = arpStepIndexRef.current % sorted.length
+      arpStepIndexRef.current = index + 1
+      return sorted[index]
+    }
+
+    if (mode === 'down') {
+      const reversed = [...sorted].reverse()
+      const index = arpStepIndexRef.current % reversed.length
+      arpStepIndexRef.current = index + 1
+      return reversed[index]
+    }
+
+    // up-down
+    const seq = sorted.length > 2
+      ? [...sorted, ...sorted.slice(1, -1).reverse()]
+      : [...sorted, ...sorted.slice(0, -1).reverse()]
+    const index = arpStepIndexRef.current % Math.max(1, seq.length)
+    arpStepIndexRef.current = index + 1
+    return seq[index]
+  })
+
+  const arpTick = useEffectEvent(() => {
+    if (arpHeldSemitonesRef.current.length === 0) return
+
+    if (arpActiveNoteIdRef.current) {
+      stopChromaticNote(arpActiveNoteIdRef.current)
+      arpActiveNoteIdRef.current = null
+    }
+
+    const semitone = getNextArpSemitone()
+    if (semitone == null) return
+
+    const noteId = buildChromaticNoteId(currentBankId, selectedPad.id, semitone) + ':arp'
+    arpActiveNoteIdRef.current = noteId
+    recordPadPressToSequence(selectedPad.id, currentBankId, semitone)
+    void playChromaticPadNote(selectedPad.id, semitone, { bankId: currentBankId, noteId })
+  })
+
+  const startArp = () => {
+    stopArp()
+    arpStepIndexRef.current = 0
+    arpDirectionRef.current = 1
+    arpTick()
+    arpIntervalRef.current = window.setInterval(arpTick, getArpStepMs())
+  }
+
+  const stopArp = () => {
+    if (arpIntervalRef.current !== null) {
+      window.clearInterval(arpIntervalRef.current)
+      arpIntervalRef.current = null
+    }
+    if (arpActiveNoteIdRef.current) {
+      stopChromaticNote(arpActiveNoteIdRef.current)
+      arpActiveNoteIdRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    if (!isArpEnabled || arpIntervalRef.current === null) return
+    // Restart the interval at the new rate without stopping the current note
+    window.clearInterval(arpIntervalRef.current)
+    arpIntervalRef.current = window.setInterval(arpTick, getArpStepMs())
+    return () => {
+      if (arpIntervalRef.current !== null) {
+        window.clearInterval(arpIntervalRef.current)
+        arpIntervalRef.current = null
+      }
+    }
+  }, [arpDivision, sequenceTempo, arpMode])
+
+  useEffect(() => {
+    if (!isArpEnabled) {
+      stopArp()
+      arpHeldSemitonesRef.current = []
+    }
+  }, [isArpEnabled])
+
   const triggerChromaticKey = (semitoneOffset: number) => {
     const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, semitoneOffset)
+
+    if (isArpEnabled) {
+      // If latched arp is running and user presses a new key after releasing all, reset the pattern
+      if (isArpLatched && arpPhysicalHeldCountRef.current === 0 && arpIntervalRef.current !== null) {
+        arpHeldSemitonesRef.current = []
+        arpStepIndexRef.current = 0
+      }
+      arpPhysicalHeldCountRef.current += 1
+      if (!arpHeldSemitonesRef.current.includes(relativeSemitone)) {
+        arpHeldSemitonesRef.current = [...arpHeldSemitonesRef.current, relativeSemitone]
+      }
+      if (arpIntervalRef.current === null) {
+        startArp()
+      }
+      return
+    }
+
     const noteId = buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone)
     recordPadPressToSequence(selectedPad.id, currentBankId, relativeSemitone)
     void playChromaticPadNote(selectedPad.id, relativeSemitone, { bankId: currentBankId, noteId })
@@ -2570,6 +2742,18 @@ function App() {
 
   const releaseChromaticKey = (semitoneOffset: number) => {
     const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, semitoneOffset)
+
+    if (isArpEnabled) {
+      arpPhysicalHeldCountRef.current = Math.max(0, arpPhysicalHeldCountRef.current - 1)
+      if (!isArpLatched) {
+        arpHeldSemitonesRef.current = arpHeldSemitonesRef.current.filter((s) => s !== relativeSemitone)
+        if (arpHeldSemitonesRef.current.length === 0) {
+          stopArp()
+        }
+      }
+      return
+    }
+
     releaseChromaticNote(buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone))
   }
 
@@ -2750,50 +2934,45 @@ function App() {
 
   const toggleSequenceStep = (padId: string, stepIndex: number) => {
     updateCurrentBank((bank) => {
-      const existingSteps = [...(bank.stepPattern[padId] ?? Array.from({ length: bank.sequenceLength }, () => false))]
-      const existingOffsets = [...(bank.stepSemitoneOffsets[padId] ?? Array.from({ length: bank.sequenceLength }, () => 0))]
-      while (existingSteps.length < bank.sequenceLength) {
+      const seq = getActiveSequence(bank)
+      const existingSteps = [...(seq.stepPattern[padId] ?? Array.from({ length: seq.sequenceLength }, () => false))]
+      const existingOffsets = [...(seq.stepSemitoneOffsets[padId] ?? Array.from({ length: seq.sequenceLength }, () => 0))]
+      while (existingSteps.length < seq.sequenceLength) {
         existingSteps.push(false)
       }
-      while (existingOffsets.length < bank.sequenceLength) {
+      while (existingOffsets.length < seq.sequenceLength) {
         existingOffsets.push(0)
       }
       const nextIsActive = !existingSteps[stepIndex]
       existingSteps[stepIndex] = nextIsActive
       existingOffsets[stepIndex] = 0
 
-      return {
-        ...bank,
-        selectedPadId: padId,
-        stepPattern: {
-          ...bank.stepPattern,
-          [padId]: existingSteps,
-        },
-        stepSemitoneOffsets: {
-          ...bank.stepSemitoneOffsets,
-          [padId]: existingOffsets,
-        },
+      const updatedSeq = {
+        ...seq,
+        stepPattern: { ...seq.stepPattern, [padId]: existingSteps },
+        stepSemitoneOffsets: { ...seq.stepSemitoneOffsets, [padId]: existingOffsets },
       }
+      const updatedSequences = [...bank.sequences]
+      updatedSequences[bank.activeSequenceIndex] = updatedSeq
+
+      return { ...bank, selectedPadId: padId, sequences: updatedSequences }
     })
   }
 
   const toggleSequencePadMute = (padId: string) => {
-    updateCurrentBank((bank) => ({
-      ...bank,
-      sequenceMuted: {
-        ...bank.sequenceMuted,
-        [padId]: !(bank.sequenceMuted[padId] ?? false),
-      },
+    updateActiveSequence((seq) => ({
+      ...seq,
+      sequenceMuted: { ...seq.sequenceMuted, [padId]: !(seq.sequenceMuted[padId] ?? false) },
     }))
   }
 
   const updateSequenceLength = (nextLength: number) => {
-    stopSequencer()
     updateCurrentBank((bank) => {
-      const sourceLength = Math.max(1, bank.sequenceLength)
+      const seq = getActiveSequence(bank)
+      const sourceLength = Math.max(1, seq.sequenceLength)
       const nextPattern = Object.fromEntries(
         bank.pads.map((pad) => {
-          const existingSteps = bank.stepPattern[pad.id] ?? []
+          const existingSteps = seq.stepPattern[pad.id] ?? []
           const baseSteps = Array.from({ length: sourceLength }, (_, index) => existingSteps[index] ?? false)
           const resized = Array.from({ length: nextLength }, (_, index) => baseSteps[index % sourceLength] ?? false)
           return [pad.id, resized]
@@ -2801,8 +2980,8 @@ function App() {
       ) as Record<string, boolean[]>
       const nextStepSemitoneOffsets = Object.fromEntries(
         bank.pads.map((pad) => {
-          const existingSteps = bank.stepPattern[pad.id] ?? []
-          const existingOffsets = bank.stepSemitoneOffsets[pad.id] ?? []
+          const existingSteps = seq.stepPattern[pad.id] ?? []
+          const existingOffsets = seq.stepSemitoneOffsets[pad.id] ?? []
           const baseSteps = Array.from({ length: sourceLength }, (_, index) => existingSteps[index] ?? false)
           const baseOffsets = Array.from({ length: sourceLength }, (_, index) => baseSteps[index] ? (existingOffsets[index] ?? 0) : 0)
           const resized = Array.from({ length: nextLength }, (_, index) => (
@@ -2812,12 +2991,11 @@ function App() {
         }),
       ) as Record<string, number[]>
 
-      return {
-        ...bank,
-        sequenceLength: nextLength,
-        stepPattern: nextPattern,
-        stepSemitoneOffsets: nextStepSemitoneOffsets,
-      }
+      const updatedSeq = { ...seq, sequenceLength: nextLength, stepPattern: nextPattern, stepSemitoneOffsets: nextStepSemitoneOffsets }
+      const updatedSequences = [...bank.sequences]
+      updatedSequences[bank.activeSequenceIndex] = updatedSeq
+
+      return { ...bank, sequences: updatedSequences }
     })
   }
 
@@ -2887,7 +3065,6 @@ function App() {
         throw new Error(payload.error || options.fallbackError)
       }
 
-      stopSequencer()
       const nextPattern = Object.fromEntries(
         currentBankPads.map((pad) => {
           const lane = payload.generatedSequence?.lanes.find((entry) => entry.padId === pad.id)
@@ -2899,8 +3076,8 @@ function App() {
         currentBankPads.map((pad) => [pad.id, Array.from({ length: currentSequenceLength }, () => 0)]),
       ) as Record<string, number[]>
 
-      updateCurrentBank((bank) => ({
-        ...bank,
+      updateActiveSequence((seq) => ({
+        ...seq,
         stepPattern: nextPattern,
         stepSemitoneOffsets: nextStepSemitoneOffsets,
       }))
@@ -2939,19 +3116,38 @@ function App() {
   }
 
   const clearSequence = () => {
-    stopSequencer()
-    updateCurrentBank((bank) => ({
-      ...bank,
-      stepPattern: Object.fromEntries(
-        bank.pads.map((pad) => [pad.id, Array.from({ length: bank.sequenceLength }, () => false)]),
-      ) as Record<string, boolean[]>,
-      stepSemitoneOffsets: Object.fromEntries(
-        bank.pads.map((pad) => [pad.id, Array.from({ length: bank.sequenceLength }, () => 0)]),
-      ) as Record<string, number[]>,
-    }))
+    updateCurrentBank((bank) => {
+      const seq = getActiveSequence(bank)
+      const clearedSeq: Sequence = {
+        ...seq,
+        stepPattern: Object.fromEntries(
+          bank.pads.map((pad) => [pad.id, Array.from({ length: seq.sequenceLength }, () => false)]),
+        ) as Record<string, boolean[]>,
+        stepSemitoneOffsets: Object.fromEntries(
+          bank.pads.map((pad) => [pad.id, Array.from({ length: seq.sequenceLength }, () => 0)]),
+        ) as Record<string, number[]>,
+      }
+      const updatedSequences = [...bank.sequences]
+      updatedSequences[bank.activeSequenceIndex] = clearedSeq
+      return { ...bank, sequences: updatedSequences }
+    })
     setSequenceGenerationStatus('idle')
     setSequenceGenerationAction(null)
     setSequenceGenerationMessage('Cleared the current sequence for Bank ' + currentBankId + '.')
+  }
+
+  const switchSequence = (index: number) => {
+    updateCurrentBank((bank) => ({
+      ...bank,
+      activeSequenceIndex: Math.min(index, bank.sequences.length - 1),
+    }))
+  }
+
+  const addSequence = () => {
+    updateCurrentBank((bank) => {
+      if (bank.sequences.length >= 8) return bank
+      return { ...bank, sequences: [...bank.sequences, createInitialSequence(bank.pads)] }
+    })
   }
 
   const generateAudio = async (mode: GenerationMode) => {
@@ -3003,6 +3199,7 @@ function App() {
         setGeneratedLoop(payload.generatedLoop)
         setEditorSource('loop')
         setIsLoopPlaying(false)
+        workViewDirectionRef.current = 'expand'
         setWorkView('editor')
         setGenerationStatus('idle')
         setGenerationMessage(payload.summary || 'Loaded a fresh loop into the work area.')
@@ -3389,6 +3586,7 @@ function App() {
           sampleUrl: generatedLoop.sampleUrl,
           sourceType: generatedLoop.sourceType,
           durationLabel: `${Math.max(0.01, region.end - region.start).toFixed(2)}s chop`,
+          group: 'chop',
           gain: 1,
         }
       })
@@ -3430,8 +3628,43 @@ function App() {
     setEditorSource('pad')
   }
 
+  const workViewOrder: WorkView[] = ['editor', 'sequence', 'mixer', 'effects']
+  const workViewDirectionRef = useRef<'left' | 'right' | 'collapse' | 'expand'>('expand')
+
   const toggleWorkView = (nextView: WorkView) => {
-    setWorkView((current) => (current === nextView ? null : nextView))
+    setWorkView((current) => {
+      if (current === nextView) {
+        workViewDirectionRef.current = 'collapse'
+        return null
+      }
+      if (current === null) {
+        workViewDirectionRef.current = 'expand'
+      } else {
+        workViewDirectionRef.current = workViewOrder.indexOf(nextView) > workViewOrder.indexOf(current) ? 'right' : 'left'
+      }
+      return nextView
+    })
+  }
+
+  const workSurfaceVariants = {
+    initial: (direction: 'left' | 'right' | 'collapse' | 'expand') => {
+      if (direction === 'expand' || direction === 'collapse') {
+        return { height: 0, opacity: 0 }
+      }
+      return { x: direction === 'right' ? 40 : -40, opacity: 0 }
+    },
+    animate: { height: 'auto', opacity: 1, x: 0 },
+    exit: (direction: 'left' | 'right' | 'collapse' | 'expand') => {
+      if (direction === 'collapse' || direction === 'expand') {
+        return { height: 0, opacity: 0 }
+      }
+      return { x: direction === 'right' ? -40 : 40, opacity: 0 }
+    },
+  }
+
+  const workSurfaceTransition = {
+    duration: 0.2,
+    ease: [0.25, 0.1, 0.25, 1],
   }
 
   const workViewTitle =
@@ -3450,7 +3683,7 @@ function App() {
       <header className="work-area" aria-label="Sampler work area">
         <div className="work-area-toolbar">
           <div className="work-area-title">
-            <p className="eyebrow">Browser Gen MPC</p>
+            <p className="eyebrow">MCP 2000xl</p>
             <strong>{workViewTitle}</strong>
           </div>
           <div className="work-area-transport" aria-label="Transport controls">
@@ -3522,7 +3755,7 @@ function App() {
           </div>
           <div className="work-area-tabs" role="tablist" aria-label="Work views">
             <button type="button" className={workView === 'editor' ? 'work-tab is-current' : 'work-tab'} onClick={() => toggleWorkView('editor')}>
-              Editor
+              Sample
             </button>
             <button type="button" className={workView === 'sequence' ? 'work-tab is-current' : 'work-tab'} onClick={() => toggleWorkView('sequence')}>
               Sequence
@@ -3536,9 +3769,10 @@ function App() {
           </div>
         </div>
 
-        {workView === null ? null : workView === 'editor' ? (
-          <div className="work-surface" aria-label="Sample editor workspace">
-            <>
+        <AnimatePresence mode="popLayout" initial={false} custom={workViewDirectionRef.current}>
+          {workView === null ? null : workView === 'editor' ? (
+          <motion.div key="editor" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
+            <div className="work-surface" aria-label="Sample editor workspace">
               <div className="editor-toolbar">
                 <div className="editor-source-tabs" role="tablist" aria-label="Editor sources">
                   <button type="button" className={editorSource === 'pad' ? 'work-tab is-current' : 'work-tab'} onClick={() => setEditorSource('pad')}>
@@ -3745,6 +3979,58 @@ function App() {
                               <ChevronRight size={14} strokeWidth={2.1} aria-hidden="true" />
                             </button>
                           </div>
+                          <div className="editor-arp-controls">
+                            <button
+                              type="button"
+                              className={isArpEnabled ? 'playback-mode-button is-current' : 'playback-mode-button'}
+                              aria-pressed={isArpEnabled}
+                              onClick={() => setIsArpEnabled((c) => !c)}
+                            >
+                              Arp
+                            </button>
+                            <select
+                              className="arp-select"
+                              value={arpDivision}
+                              onChange={(e) => setArpDivision(e.target.value as ArpDivision)}
+                              disabled={!isArpEnabled}
+                              aria-label="Arp time division"
+                            >
+                              {arpDivisionOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            <select
+                              className="arp-select"
+                              value={arpMode}
+                              onChange={(e) => setArpMode(e.target.value as ArpMode)}
+                              disabled={!isArpEnabled}
+                              aria-label="Arp mode"
+                            >
+                              {arpModeOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              className={isArpLatched ? 'playback-mode-button is-current' : 'playback-mode-button'}
+                              aria-pressed={isArpLatched}
+                              onClick={() => {
+                                setIsArpLatched((c) => {
+                                  if (c) {
+                                    // Turning latch off — stop arp if no keys are physically held
+                                    if (arpPhysicalHeldCountRef.current === 0) {
+                                      arpHeldSemitonesRef.current = []
+                                      stopArp()
+                                    }
+                                  }
+                                  return !c
+                                })
+                              }}
+                              title="Latch — hold the arpeggio after releasing keys"
+                            >
+                              Latch
+                            </button>
+                          </div>
                         </div>
 
                         <div className="editor-chromatic-keyboard" role="group" aria-label="Chromatic keyboard">
@@ -3752,7 +4038,7 @@ function App() {
                             {chromaticKeyLayout.filter((key) => key.kind === 'white').map((key) => {
                               const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, key.semitoneOffset)
                               const noteId = buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone)
-                              const isActive = activeChromaticNoteSet.has(noteId)
+                              const isActive = activeChromaticNoteSet.has(noteId) || activeChromaticNoteSet.has(noteId + ':arp')
 
                               return (
                                 <button
@@ -3774,7 +4060,7 @@ function App() {
                             {chromaticKeyLayout.filter((key) => key.kind === 'black').map((key) => {
                               const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, key.semitoneOffset)
                               const noteId = buildChromaticNoteId(currentBankId, selectedPad.id, relativeSemitone)
-                              const isActive = activeChromaticNoteSet.has(noteId)
+                              const isActive = activeChromaticNoteSet.has(noteId) || activeChromaticNoteSet.has(noteId + ':arp')
 
                               return (
                                 <button
@@ -3885,9 +4171,10 @@ function App() {
                   </div>
                 </div>
               ) : null}
-            </>
-          </div>
+            </div>
+          </motion.div>
         ) : workView === 'mixer' ? (
+          <motion.div key="mixer" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
           <MixerWorkspace
             bankMixerGains={bankMixerGains}
             bankMixerMuted={bankMixerMuted}
@@ -3907,7 +4194,9 @@ function App() {
             onPadGainChange={updatePadGain}
             onPadPanChange={updatePadPan}
           />
+          </motion.div>
         ) : workView === 'effects' ? (
+          <motion.div key="effects" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
           <EffectsWorkspace
             selectedEffectId={selectedEffectId}
             effectEnabled={effectEnabled}
@@ -3918,7 +4207,9 @@ function App() {
             onParamChange={updateEffectParam}
             onToggleEnabled={() => setEffectEnabled((current) => !current)}
           />
+          </motion.div>
         ) : (
+          <motion.div key="sequence" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
           <SequenceWorkspace
             sequencePromptText={sequencePromptText}
             sequenceGenerationStatus={sequenceGenerationStatus}
@@ -3931,6 +4222,8 @@ function App() {
             currentSequenceMuted={currentSequenceMuted}
             sequencePlayheadStep={sequencePlayheadStep}
             selectedPad={selectedPad}
+            sequenceCount={currentBankState.sequences.length}
+            activeSequenceIndex={currentBankState.activeSequenceIndex}
             onPromptChange={setSequencePromptText}
             onGenerateSequence={() => { void generateSequence() }}
             onRandomizeSequence={() => { void randomizeSequence() }}
@@ -3942,8 +4235,12 @@ function App() {
             onReleasePad={releasePad}
             onToggleStep={toggleSequenceStep}
             onTogglePadMute={toggleSequencePadMute}
+            onSwitchSequence={switchSequence}
+            onAddSequence={addSequence}
           />
+          </motion.div>
         )}
+        </AnimatePresence>
       </header>
 
       <section className="workspace">

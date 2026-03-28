@@ -17,6 +17,7 @@ export const groupLabels: Record<string, string> = {
   textures: 'Textures',
   melodic: 'Melodic',
   fx: 'FX',
+  chop: 'Chop',
 }
 
 export const padSlotIds = starterBankPads.A.map((pad) => pad.id)
@@ -51,6 +52,23 @@ export const sequenceScheduleAheadSeconds = 0.12
 export const supportedGlobalEffectIds = new Set(['simplefilter', 'delay', 'distortion', 'bitcrusher', 'reverb', 'compressor', 'autofilter', 'autopanner', 'chorus', 'combfilter', 'djeq', 'flanger', 'hallreverb', 'loopchop', 'phaser', 'pitchshifter', 'ringmodulator', 'sidechainpump', 'tapestop', 'taptempodelay', 'tremolo', 'vibrato', 'lofitape'])
 
 export const lfoWaveforms: OscillatorType[] = ['sine', 'square', 'sawtooth', 'triangle']
+
+export const arpDivisionOptions: { value: import('./types').ArpDivision; label: string; beatFraction: number }[] = [
+  { value: '1/4', label: '1/4', beatFraction: 1 },
+  { value: '1/8', label: '1/8', beatFraction: 0.5 },
+  { value: '1/16', label: '1/16', beatFraction: 0.25 },
+  { value: '1/32', label: '1/32', beatFraction: 0.125 },
+  { value: '1/4T', label: '1/4T', beatFraction: 1 / 3 },
+  { value: '1/8T', label: '1/8T', beatFraction: 1 / 6 },
+]
+
+export const arpModeOptions: { value: import('./types').ArpMode; label: string }[] = [
+  { value: 'up', label: 'Up' },
+  { value: 'down', label: 'Down' },
+  { value: 'up-down', label: 'Up-Down' },
+  { value: 'random', label: 'Random' },
+  { value: 'order', label: 'Order' },
+]
 
 export const preferredRecordingMimeTypes = [
   'audio/webm;codecs=opus',

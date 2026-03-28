@@ -2,7 +2,7 @@ import type { Pad } from './mock-kit'
 import type { BankKitId } from './mock-kit'
 import { starterBankPads } from './kit-generation'
 import { padSlotIds, defaultMidiBaseNote, midiStorageKey, midiSelectedInputStorageKey } from './constants'
-import { bankIds, type BankId, type BankState, type PadPlaybackSetting, type MidiPadNoteMappings } from './types'
+import { bankIds, type BankId, type BankState, type Sequence, type PadPlaybackSetting, type MidiPadNoteMappings } from './types'
 
 export const createInitialBankMixerGains = () =>
   Object.fromEntries(bankIds.map((bankId) => [bankId, 1])) as Record<BankId, number>
@@ -40,14 +40,22 @@ export const createInitialPlaybackSettings = (pads: Pad[]) =>
     pads.map((pad) => [pad.id, { startFraction: 0, endFraction: 1, semitoneOffset: 0, gain: pad.gain, pan: 0, playbackMode: 'one-shot', reversed: false }]),
   ) as Record<string, PadPlaybackSetting>
 
+export const createInitialSequence = (pads: Pad[], stepCount = 16): Sequence => ({
+  sequenceLength: stepCount,
+  stepPattern: createInitialStepPattern(pads, stepCount),
+  stepSemitoneOffsets: createInitialStepSemitoneOffsets(pads, stepCount),
+  sequenceMuted: createInitialSequenceMutedState(pads),
+})
+
+export const getActiveSequence = (bank: BankState): Sequence =>
+  bank.sequences[bank.activeSequenceIndex] ?? bank.sequences[0]
+
 export const createInitialBankState = (bankId: BankKitId): BankState => ({
   pads: starterBankPads[bankId].map((pad) => ({ ...pad })),
   selectedPadId: starterBankPads[bankId][0].id,
   playbackSettings: createInitialPlaybackSettings(starterBankPads[bankId]),
-  sequenceLength: 16,
-  stepPattern: createInitialStepPattern(starterBankPads[bankId]),
-  stepSemitoneOffsets: createInitialStepSemitoneOffsets(starterBankPads[bankId]),
-  sequenceMuted: createInitialSequenceMutedState(starterBankPads[bankId]),
+  sequences: [createInitialSequence(starterBankPads[bankId])],
+  activeSequenceIndex: 0,
 })
 
 export const createInitialBanksState = () =>

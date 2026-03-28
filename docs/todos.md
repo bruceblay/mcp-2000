@@ -1,8 +1,6 @@
 - rename session to project, have a projects select (4)
 - edit sample type/description text (2)
 - note repeat (4)
-- arpeggiator (5)
-- generate new sample based off mic input (5)
 - isolate sounds or instruments on an input sample (9)
 - recorded logs of what other people are prompting (4)
 - analytics (5)
@@ -10,13 +8,15 @@
 - sample envelope (4)
 - edit pad color(s) (2)
 - drag/drop sound file onto sample editor to display it on loop edit view
-- do code quality check. look for reusable components
 - dark mode?
-- sequencer stops playing when new sequence is generated or sequence lenght is changed
-- multiple sequences per bank
 - key and scale selection?  these get auto fed into our generative tool calls
 - some bugs with the chromatic punch in recording 
 - better default kits: 1 loop, 1 bass, one reg drum, one sea shell drum
 - better example prompts
+- info modal?
+- trigger probability on each step? maybe a right click with a percentage slider?
+- hosting
+- finalize name (mcp 2000 isn't so bad actually)
+- mpc 2000 color scheme (beige, red, yellowish-orange, blue, slider, font)
 
 - design looks horrible (7)
