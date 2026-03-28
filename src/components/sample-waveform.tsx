@@ -234,7 +234,7 @@ export function SampleWaveform({
     const middle = height / 2
     const step = width / displayPeaks.length
 
-    context.strokeStyle = '#7a6047'
+    context.strokeStyle = '#1a2a10'
     context.lineWidth = 1
     context.beginPath()
 

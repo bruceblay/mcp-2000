@@ -1,8 +1,7 @@
 :root {
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
-  color: oklch(0.2 0.02 48);
-  background:
-    linear-gradient(180deg, oklch(0.9 0.01 80), oklch(0.82 0.02 70));
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #2a2520;
+  background: #d5cec2;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -11,12 +10,24 @@
   font-weight: 400;
 
   --page-max-width: 90rem;
-  --panel-bg: oklch(0.93 0.01 80);
-  --panel-border: oklch(0.55 0.02 60 / 0.65);
-  --text-strong: oklch(0.16 0.02 42);
-  --text-muted: oklch(0.39 0.02 55);
-  --accent-warm: oklch(0.58 0.15 38);
-  --accent-gold: oklch(0.78 0.11 84);
+  --panel-bg: #ddd7cb;
+  --panel-border: #b5ae9f;
+  --text-strong: #1e1a16;
+  --text-muted: #6b6158;
+  --accent-warm: #3d506e;
+  --accent-gold: #6a7a8e;
+
+  --pad-bg: #b0aaa2;
+  --pad-bg-hover: #bab4ac;
+  --pad-border: #c8c2b8;
+  --pad-text: #3a3632;
+  --pad-text-muted: #706860;
+
+  --lcd-bg: #b8c490;
+  --lcd-text: #1a2a10;
+  --lcd-text-muted: #4a5c38;
+  --lcd-border: #7a8a5a;
+  --lcd-highlight: #cad8a6;
 }
 
 * {
@@ -133,15 +144,14 @@ button:active:not(:disabled) {
 
 .work-area {
   display: grid;
-  gap: 1px;
   margin-bottom: 1rem;
-  border: 1px solid var(--panel-border);
-  background: var(--panel-border);
+  border: none;
+  background: none;
 }
 
-.work-area-toolbar,
 .work-surface {
-  background: var(--panel-bg);
+  background: var(--lcd-bg);
+  border: 1px solid var(--lcd-border);
 }
 
 .work-area-toolbar {
@@ -153,7 +163,11 @@ button:active:not(:disabled) {
   align-items: center;
   gap: 1rem;
   padding: 0.9rem 1rem;
-  box-shadow: 0 0.6rem 1.4rem oklch(0.28 0.03 48 / 0.1);
+  background: #c8c2b8;
+  color: var(--text-strong);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 0.6rem 1.4rem rgba(0, 0, 0, 0.06);
+  font-family: "SF Mono", "Cascadia Mono", "Consolas", "Menlo", monospace;
 }
 
 .work-area-title {
@@ -210,7 +224,7 @@ button:active:not(:disabled) {
 .transport-field input {
   width: 5.2rem;
   border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 92%, white);
+  background: transparent;
   color: var(--text-strong);
   padding: 0.42rem 0.55rem;
 }
@@ -219,21 +233,21 @@ button:active:not(:disabled) {
 .transport-button.primary-button,
 .transport-button.secondary-button {
   background: transparent;
-  box-shadow: inset 0 0 0 1px oklch(0.5 0.02 60 / 0.22);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
   color: var(--text-strong);
 }
 
 .transport-button.primary-button:hover:not(:disabled),
 .transport-button.secondary-button:hover:not(:disabled) {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px oklch(0.5 0.02 60 / 0.38);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
 }
 
 .transport-button.is-active,
 .transport-button[aria-pressed='true'] {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--accent-warm) 55%, white);
-  color: var(--accent-warm);
+  background: var(--accent-warm);
+  box-shadow: inset 0 0 0 1px var(--accent-warm);
+  color: #e0e4ea;
 }
 
 .work-area-tabs {
@@ -243,27 +257,33 @@ button:active:not(:disabled) {
 }
 
 .work-tab {
-  background: oklch(1 0 0 / 0.4);
+  background: rgba(255, 255, 255, 0.35);
   color: var(--text-muted);
   padding: 0.3rem 0.6rem;
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-weight: 500;
-  box-shadow: inset 0 0 0 1px oklch(0.5 0.02 60 / 0.15);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 
 .work-tab:hover:not(.is-current) {
-  background: oklch(1 0 0 / 0.65);
+  background: rgba(255, 255, 255, 0.55);
   color: var(--text-strong);
 }
 
 .work-tab.is-current {
-  background: linear-gradient(180deg, var(--accent-warm), oklch(0.5 0.12 35));
-  color: oklch(0.98 0.01 80);
+  background: var(--lcd-text);
+  color: var(--lcd-highlight);
   box-shadow:
-    0 1px 3px oklch(0.3 0.08 38 / 0.25),
-    inset 0 1px 0 oklch(1 0 0 / 0.1);
+    0 1px 3px rgba(26, 42, 16, 0.2);
+}
+
+.work-area-tabs .work-tab.is-current {
+  background: #c48c2c;
+  color: #faf3e6;
+  box-shadow:
+    0 1px 3px rgba(160, 110, 30, 0.3);
 }
 
 .work-tab:disabled {
@@ -276,6 +296,61 @@ button:active:not(:disabled) {
   display: grid;
   gap: 1rem;
   padding: 1rem;
+  font-family: "SF Mono", "Cascadia Mono", "Consolas", "Menlo", monospace;
+  color: var(--lcd-text);
+}
+
+.work-surface .transport-label,
+.work-surface .eyebrow,
+.work-surface .panel-kicker {
+  color: var(--lcd-text-muted);
+}
+
+.work-area-toolbar .transport-label,
+.work-area-toolbar .eyebrow {
+  color: var(--text-muted);
+}
+
+.work-surface input,
+.work-surface select {
+  border-color: var(--lcd-border);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text);
+  font-size: 0.78rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.work-surface *,
+.work-area-toolbar * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--lcd-border) transparent;
+}
+
+.work-surface ::-webkit-scrollbar,
+.work-area-toolbar ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.work-surface ::-webkit-scrollbar-track,
+.work-area-toolbar ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.work-surface ::-webkit-scrollbar-thumb,
+.work-area-toolbar ::-webkit-scrollbar-thumb {
+  background: var(--lcd-border);
+  border-radius: 3px;
+}
+
+.work-surface ::-webkit-scrollbar-thumb:hover,
+.work-area-toolbar ::-webkit-scrollbar-thumb:hover {
+  background: var(--lcd-text-muted);
+}
+
+.work-surface ::-webkit-scrollbar-corner,
+.work-area-toolbar ::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .work-surface-meta {
@@ -329,9 +404,9 @@ button:active:not(:disabled) {
 .editor-transform-bar input {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 92%, white);
-  color: var(--text-strong);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text);
   padding: 0.52rem 0.68rem;
 }
 
@@ -341,8 +416,8 @@ button:active:not(:disabled) {
 
 .waveform-panel {
   position: relative;
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 90%, white);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
   min-height: 6.75rem;
   overflow: hidden;
 }
@@ -390,9 +465,9 @@ button:active:not(:disabled) {
   margin: 0;
   padding: 0.35rem 0.3rem 0;
   border: 0;
-  border-left: 1px solid rgba(116, 74, 35, 0.45);
-  border-right: 1px solid rgba(116, 74, 35, 0.12);
-  background: rgba(116, 74, 35, 0.08);
+  border-left: 1px solid rgba(26, 42, 16, 0.4);
+  border-right: 1px solid rgba(26, 42, 16, 0.1);
+  background: rgba(26, 42, 16, 0.08);
   cursor: pointer;
   transition:
     background 140ms ease,
@@ -401,12 +476,12 @@ button:active:not(:disabled) {
 }
 
 .sample-waveform__region:hover {
-  background: rgba(157, 95, 37, 0.14);
+  background: rgba(26, 42, 16, 0.14);
 }
 
 .sample-waveform__region.is-selected {
-  background: rgba(157, 95, 37, 0.22);
-  box-shadow: inset 0 0 0 1px rgba(157, 95, 37, 0.24);
+  background: rgba(26, 42, 16, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(26, 42, 16, 0.22);
 }
 
 .sample-waveform__region-label {
@@ -417,8 +492,8 @@ button:active:not(:disabled) {
   white-space: nowrap;
   padding: 0.1rem 0.28rem;
   border-radius: 999px;
-  background: rgba(18, 27, 33, 0.68);
-  color: rgba(244, 239, 228, 0.9);
+  background: rgba(26, 42, 16, 0.75);
+  color: rgba(202, 216, 166, 0.95);
   font-size: 0.54rem;
   line-height: 1.1;
   text-transform: uppercase;
@@ -426,8 +501,8 @@ button:active:not(:disabled) {
 }
 
 .sample-waveform__region.is-selected .sample-waveform__region-label {
-  background: rgba(157, 95, 37, 0.9);
-  color: oklch(0.98 0.01 80);
+  background: rgba(26, 42, 16, 0.9);
+  color: rgba(202, 216, 166, 0.95);
 }
 
 .sample-waveform__region-handle {
@@ -447,12 +522,12 @@ button:active:not(:disabled) {
   left: 50%;
   width: 3px;
   transform: translateX(-50%);
-  background: rgba(157, 95, 37, 0.78);
+  background: rgba(26, 42, 16, 0.7);
 }
 
 .sample-waveform__region:hover .sample-waveform__region-handle::after,
 .sample-waveform__region.is-selected .sample-waveform__region-handle::after {
-  background: rgba(157, 95, 37, 0.98);
+  background: rgba(26, 42, 16, 0.95);
 }
 
 .sample-waveform__region-handle--start {
@@ -491,7 +566,7 @@ button:active:not(:disabled) {
   bottom: 0;
   width: 2px;
   margin-left: -1px;
-  background: rgba(157, 95, 37, 0.95);
+  background: var(--lcd-text);
   pointer-events: auto;
   cursor: ew-resize;
 }
@@ -504,8 +579,8 @@ button:active:not(:disabled) {
   width: 0.7rem;
   height: 0.7rem;
   transform: translate(-50%, -50%);
-  border: 1px solid rgba(36, 23, 13, 0.85);
-  background: rgba(157, 95, 37, 0.95);
+  border: 1px solid var(--lcd-text);
+  background: var(--lcd-text);
 }
 
 .sample-waveform__playhead {
@@ -514,7 +589,7 @@ button:active:not(:disabled) {
   bottom: 0;
   width: 2px;
   margin-left: -1px;
-  background: rgba(36, 23, 13, 0.95);
+  background: var(--lcd-text);
   z-index: 4;
   pointer-events: none;
 }
@@ -588,9 +663,9 @@ button:active:not(:disabled) {
 }
 
 .bank-load-field select {
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 92%, white);
-  color: var(--text-strong);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text);
   padding: 0.34rem 0.5rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -615,7 +690,7 @@ button:active:not(:disabled) {
 }
 
 .mixer-section-heading strong {
-  color: var(--text-strong);
+  color: var(--lcd-text);
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -638,9 +713,10 @@ button:active:not(:disabled) {
 
 .mixer-bank-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.35rem;
-  align-items: start;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  column-gap: 0.35rem;
+  row-gap: 0.35rem;
+  align-items: stretch;
 }
 
 .mixer-pad-grid {
@@ -650,7 +726,7 @@ button:active:not(:disabled) {
   row-gap: 1rem;
   max-height: 28rem;
   overflow-y: auto;
-  padding-right: 0.4rem;
+  scrollbar-gutter: stable;
   align-items: start;
 }
 
@@ -664,8 +740,8 @@ button:active:not(:disabled) {
   min-width: 0;
   padding: 0.5rem 0.2rem 0.4rem;
   border-radius: 6px;
-  background: oklch(0.90 0.008 70);
-  border: 1px solid oklch(0.82 0.012 65);
+  background: var(--lcd-highlight);
+  border: 1px solid var(--lcd-border);
 }
 
 .mixer-strip .trim-slider-root.vertical {
@@ -687,50 +763,40 @@ button:active:not(:disabled) {
 }
 
 .mixer-export-strip {
-  grid-template-rows: auto minmax(9rem, 9rem) auto;
+  grid-column: span 3;
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  padding: 0.6rem 0.8rem;
+  background: var(--lcd-bg);
+  border: 1px solid var(--lcd-border);
+  border-radius: 6px;
 }
 
 .mixer-export-panel {
-  align-self: stretch;
-  width: 100%;
-  min-height: 100%;
   display: grid;
-  align-content: center;
-  gap: 0.65rem;
-  padding: 0.7rem;
-  border-radius: 0.5rem;
-  background: oklch(0.86 0.008 70);
+  gap: 0.5rem;
 }
 
 .mixer-export-button {
-  width: 100%;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
+  justify-self: start;
+  gap: 0.4rem;
 }
 
 .mixer-export-note {
   margin: 0;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.mixer-export-caption {
-  color: var(--text-muted);
-  font-size: 0.54rem;
-  line-height: 1.1;
-  text-align: center;
-  text-transform: uppercase;
+  color: var(--lcd-text-muted);
+  font-size: 0.65rem;
+  line-height: 1.4;
   letter-spacing: 0.08em;
 }
 
 .mixer-strip-name {
   width: 100%;
   max-width: 11rem;
-  color: var(--text-muted);
+  color: var(--lcd-text-muted);
   font-size: 0.62rem;
   line-height: 1.2;
   overflow: hidden;
@@ -767,24 +833,24 @@ button:active:not(:disabled) {
 .mixer-pan-slider .trim-slider-track {
   height: 3px;
   border-radius: 1.5px;
-  background: oklch(0.78 0.01 65);
+  background: var(--lcd-border);
 }
 
 .mixer-pan-slider .trim-slider-range {
-  background: oklch(0.50 0.06 55);
+  background: var(--lcd-text-muted);
 }
 
 .mixer-pan-slider .trim-slider-thumb {
   width: 10px;
   height: 10px;
   border-width: 1.5px;
-  border-color: oklch(0.50 0.06 55);
+  border-color: var(--lcd-text-muted);
 }
 
 .mixer-strip .transport-label {
   font-size: 0.6rem;
   letter-spacing: 0.1em;
-  color: var(--text-strong);
+  color: var(--lcd-text);
   padding-bottom: 0.2rem;
 }
 
@@ -798,27 +864,29 @@ button:active:not(:disabled) {
 .effects-toolbar {
   display: flex;
   gap: 1rem;
-  align-items: end;
+  align-items: center;
   flex-wrap: wrap;
 }
 
 .effects-select-field {
-  display: grid;
-  gap: 0.35rem;
-  width: min(22rem, 100%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
 }
 
 .effects-select-field select {
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 92%, white);
-  color: var(--text-strong);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text);
   padding: 0.55rem 0.7rem;
 }
 
 .effects-description,
 .effects-note {
   margin: 0;
-  color: var(--text-muted);
+  color: var(--lcd-text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
 }
 
 .effects-grid {
@@ -834,10 +902,14 @@ button:active:not(:disabled) {
 }
 
 .effect-control span {
-  color: var(--text-muted);
+  color: var(--lcd-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.72rem;
+}
+
+.effect-control strong {
+  font-size: 0.78rem;
 }
 
 .editor-pad-footer {
@@ -963,9 +1035,9 @@ button:active:not(:disabled) {
 }
 
 .arp-select {
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 92%, white);
-  color: var(--text-strong);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text);
   padding: 0.32rem 0.4rem;
   font-size: 0.72rem;
   min-width: 3.8rem;
@@ -1091,19 +1163,19 @@ button:active:not(:disabled) {
 }
 
 .editor-chromatic-key.is-active.white-key {
-  background: linear-gradient(180deg, color-mix(in oklch, var(--accent-warm) 72%, white), color-mix(in oklch, var(--accent-warm) 82%, oklch(0.48 0.11 35)));
+  background: var(--accent-warm);
   box-shadow:
-    inset 0 -3px 0 oklch(0.46 0.11 34),
-    0 5px 12px oklch(0.42 0.1 34 / 0.2);
-  color: oklch(0.98 0.01 80);
+    inset 0 -3px 0 #2d3e58,
+    0 5px 12px rgba(61, 80, 110, 0.25);
+  color: #e0e4ea;
 }
 
 .editor-chromatic-key.is-active.black-key {
-  background: linear-gradient(180deg, var(--accent-warm), oklch(0.48 0.11 35));
+  background: var(--accent-warm);
   box-shadow:
-    inset 0 -2px 0 oklch(0.42 0.1 34),
-    0 6px 12px oklch(0.42 0.1 34 / 0.26);
-  color: oklch(0.98 0.01 80);
+    inset 0 -2px 0 #2d3e58,
+    0 6px 12px rgba(61, 80, 110, 0.3);
+  color: #e0e4ea;
 }
 
 .editor-chromatic-note-label,
@@ -1176,16 +1248,37 @@ button:active:not(:disabled) {
 }
 
 .playback-mode-button.is-current {
-  background: linear-gradient(180deg, var(--accent-warm), oklch(0.5 0.12 35));
-  color: oklch(0.98 0.01 80);
+  background: var(--lcd-text);
+  color: var(--lcd-highlight);
   box-shadow:
-    0 1px 2px oklch(0.3 0.08 38 / 0.2),
-    inset 0 1px 0 oklch(1 0 0 / 0.1);
+    0 1px 2px rgba(26, 42, 16, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .playback-mode-button:hover:not(.is-current) {
   background: oklch(1 0 0 / 0.65);
   color: var(--text-strong);
+}
+
+.playback-mode-button.mixer-action-button {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--lcd-text-muted);
+  box-shadow: inset 0 0 0 1px rgba(122, 138, 90, 0.35);
+}
+
+.playback-mode-button.mixer-action-button:hover:not(.is-current) {
+  background: rgba(255, 255, 255, 0.32);
+  color: var(--lcd-text);
+}
+
+.playback-mode-button.mixer-action-button.is-current {
+  background: var(--lcd-text);
+  color: var(--lcd-highlight);
+  box-shadow: 0 1px 3px rgba(26, 42, 16, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .prompt-field {
@@ -1204,7 +1297,7 @@ button:active:not(:disabled) {
   min-height: 9rem;
   padding: 1rem;
   border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 75%, white);
+  background: #eae6de;
   color: var(--text-strong);
 }
 
@@ -1233,18 +1326,18 @@ button:active:not(:disabled) {
 }
 
 .primary-button {
-  background: linear-gradient(180deg, var(--accent-warm), oklch(0.5 0.12 35));
-  color: oklch(0.98 0.01 80);
+  background: var(--accent-warm);
+  color: #e0e4ea;
   box-shadow:
-    0 1px 3px oklch(0.3 0.08 38 / 0.25),
-    inset 0 1px 0 oklch(1 0 0 / 0.1);
+    0 1px 3px rgba(61, 80, 110, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .primary-button:hover:not(:disabled) {
-  background: linear-gradient(180deg, oklch(0.62 0.15 38), oklch(0.52 0.13 35));
+  background: #4a5f80;
   box-shadow:
-    0 2px 6px oklch(0.3 0.08 38 / 0.3),
-    inset 0 1px 0 oklch(1 0 0 / 0.15);
+    0 2px 6px rgba(61, 80, 110, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .secondary-button {
@@ -1379,6 +1472,11 @@ button:active:not(:disabled) {
   margin-bottom: 0;
 }
 
+.pads.panel {
+  background: #c8c2b8;
+  border-color: #b5ae9f;
+}
+
 .midi-toggle-button {
   display: inline-flex;
   align-items: center;
@@ -1412,10 +1510,10 @@ button:active:not(:disabled) {
 }
 
 .midi-toggle-indicator.is-live {
-  background: linear-gradient(180deg, color-mix(in oklch, var(--accent-warm) 82%, white), oklch(0.56 0.13 35));
+  background: var(--accent-warm);
   box-shadow:
-    0 0 0 0.08rem color-mix(in oklch, var(--accent-warm) 18%, white),
-    inset 0 0 0 1px oklch(1 0 0 / 0.22);
+    0 0 0 0.08rem rgba(61, 80, 110, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .pads .bank-switcher {
@@ -1427,9 +1525,9 @@ button:active:not(:disabled) {
   gap: 0.7rem;
   margin-bottom: 0.8rem;
   padding: 0.8rem 0.85rem;
-  border: 1px solid color-mix(in oklch, var(--panel-border) 88%, var(--accent-warm) 12%);
+  border: 1px solid var(--panel-border);
   border-radius: 0.9rem;
-  background: linear-gradient(180deg, color-mix(in oklch, var(--panel-bg) 92%, white), color-mix(in oklch, var(--panel-bg) 98%, var(--accent-warm) 2%));
+  background: var(--panel-bg);
 }
 
 .midi-panel-header {
@@ -1549,11 +1647,30 @@ button:active:not(:disabled) {
 }
 
 .bank-button.is-current {
-  background: linear-gradient(180deg, var(--accent-warm), oklch(0.5 0.12 35));
-  color: oklch(0.98 0.01 80);
+  background: var(--accent-warm);
+  color: #e0e4ea;
   box-shadow:
-    0 1px 3px oklch(0.3 0.08 38 / 0.2),
-    inset 0 1px 0 oklch(1 0 0 / 0.1);
+    0 1px 3px rgba(61, 80, 110, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.work-surface .bank-button {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--lcd-text-muted);
+  box-shadow: inset 0 0 0 1px rgba(122, 138, 90, 0.35);
+}
+
+.work-surface .bank-button:hover:not(.is-current) {
+  background: rgba(255, 255, 255, 0.32);
+  color: var(--lcd-text);
+}
+
+.work-surface .bank-button.is-current {
+  background: var(--lcd-text);
+  color: var(--lcd-highlight);
+  box-shadow:
+    0 1px 3px rgba(26, 42, 16, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .grid-status {
@@ -1590,6 +1707,8 @@ button:active:not(:disabled) {
   padding: 0.8rem;
   text-align: left;
   overflow: hidden;
+  background: var(--pad-bg);
+  border-color: var(--pad-border);
   transition:
     transform 180ms ease,
     border-color 180ms ease;
@@ -1607,12 +1726,13 @@ button:active:not(:disabled) {
 }
 
 .pad.is-selected {
-  border-color: oklch(0.34 0.08 42);
+  border-color: var(--accent-warm);
+  box-shadow: 0 0 0 1px var(--accent-warm);
 }
 
 .pad.is-active {
   transform: translate(-2px, -2px);
-  background: oklch(0.92 0.04 70);
+  background: var(--pad-bg-hover);
 }
 
 .pad.is-midi-learning {
@@ -1629,13 +1749,13 @@ button:active:not(:disabled) {
 .pad strong {
   font-size: 0.82rem;
   line-height: 1;
-  color: var(--text-strong);
+  color: var(--pad-text);
 }
 
 .pad-key,
 .pad-group,
 .pad-sample {
-  color: var(--text-muted);
+  color: var(--pad-text-muted);
 }
 
 .pad-key {
@@ -1651,24 +1771,12 @@ button:active:not(:disabled) {
   border-radius: 4px;
 }
 
-.pad-drums {
-  background: oklch(0.96 0.012 70);
-}
-
-.pad-textures {
-  background: oklch(0.96 0.012 140);
-}
-
-.pad-melodic {
-  background: oklch(0.96 0.012 230);
-}
-
-.pad-fx {
-  background: oklch(0.96 0.012 20);
-}
-
+.pad-drums,
+.pad-textures,
+.pad-melodic,
+.pad-fx,
 .pad-chop {
-  background: oklch(0.96 0.012 70);
+  background: var(--pad-bg);
 }
 
 .pad-midi-badge {
@@ -1696,8 +1804,8 @@ button:active:not(:disabled) {
 }
 
 .pad-midi-badge.is-learning {
-  background: linear-gradient(180deg, color-mix(in oklch, var(--accent-gold) 38%, white), color-mix(in oklch, var(--accent-warm) 16%, white));
-  color: color-mix(in oklch, var(--accent-warm) 82%, black 18%);
+  background: rgba(61, 80, 110, 0.15);
+  color: var(--accent-warm);
   box-shadow:
     0 6px 14px oklch(0.58 0.12 65 / 0.14),
     inset 0 0 0 1px color-mix(in oklch, var(--accent-warm) 42%, white);
@@ -1761,7 +1869,7 @@ button:active:not(:disabled) {
   position: absolute;
   height: 100%;
   border-radius: 2px;
-  background: var(--accent-warm);
+  background: var(--lcd-text);
 }
 
 .trim-slider-thumb {
@@ -1769,19 +1877,19 @@ button:active:not(:disabled) {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid var(--accent-warm);
-  background: var(--panel-bg);
+  border: 2px solid var(--lcd-text);
+  background: var(--lcd-highlight);
   cursor: grab;
   transition: box-shadow 0.15s;
 }
 
 .trim-slider-thumb:hover {
-  box-shadow: 0 0 0 4px oklch(0.58 0.15 38 / 0.2);
+  box-shadow: 0 0 0 4px rgba(26, 42, 16, 0.18);
 }
 
 .trim-slider-thumb:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px oklch(0.58 0.15 38 / 0.3);
+  box-shadow: 0 0 0 4px rgba(26, 42, 16, 0.25);
 }
 
 .trim-slider-root.vertical {
@@ -1816,22 +1924,22 @@ button:active:not(:disabled) {
 .mixer-strip .trim-slider-track[data-orientation="vertical"] {
   width: 6px;
   border-radius: 3px;
-  background: oklch(0.30 0.02 55);
-  box-shadow: inset 0 1px 3px oklch(0 0 0 / 0.35);
+  background: var(--lcd-border);
+  box-shadow: inset 0 1px 3px rgba(26, 42, 16, 0.3);
 }
 
 .mixer-strip .trim-slider-range[data-orientation="vertical"] {
   border-radius: 3px;
-  background: linear-gradient(to top, oklch(0.58 0.15 38), oklch(0.65 0.14 50));
+  background: linear-gradient(to top, var(--lcd-text), var(--lcd-text-muted));
 }
 
 .mixer-strip .trim-slider-thumb {
   width: 24px;
   height: 12px;
   border-radius: 2px;
-  border: 1px solid oklch(0.60 0.02 60);
-  background: linear-gradient(to bottom, oklch(0.98 0 0), oklch(0.88 0.005 65));
-  box-shadow: 0 1px 3px oklch(0 0 0 / 0.18);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
+  box-shadow: 0 1px 3px rgba(26, 42, 16, 0.18);
   cursor: grab;
   transition: box-shadow 0.12s, background 0.12s;
 }
@@ -1843,18 +1951,18 @@ button:active:not(:disabled) {
   left: 5px;
   right: 5px;
   height: 1px;
-  background: oklch(0.65 0.02 60);
+  background: var(--lcd-border);
   transform: translateY(-0.5px);
 }
 
 .mixer-strip .trim-slider-thumb:hover {
-  background: linear-gradient(to bottom, oklch(1 0 0), oklch(0.92 0.005 65));
-  box-shadow: 0 1px 4px oklch(0 0 0 / 0.22), 0 0 0 2px oklch(0.58 0.15 38 / 0.15);
+  background: #dae6b8;
+  box-shadow: 0 1px 4px rgba(26, 42, 16, 0.22), 0 0 0 2px rgba(26, 42, 16, 0.15);
 }
 
 .mixer-strip .trim-slider-thumb:focus-visible {
   outline: none;
-  box-shadow: 0 1px 4px oklch(0 0 0 / 0.22), 0 0 0 2px oklch(0.58 0.15 38 / 0.3);
+  box-shadow: 0 1px 4px rgba(26, 42, 16, 0.22), 0 0 0 2px rgba(26, 42, 16, 0.3);
 }
 
 .mixer-strip .trim-slider-thumb:active {
@@ -1862,16 +1970,16 @@ button:active:not(:disabled) {
 }
 
 .mixer-master-strip {
-  background: oklch(0.87 0.012 55);
-  border-color: oklch(0.78 0.015 50);
+  background: var(--lcd-bg);
+  border-color: var(--lcd-border);
 }
 
 .mixer-master-strip .trim-slider-range[data-orientation="vertical"] {
-  background: linear-gradient(to top, oklch(0.62 0.16 45), oklch(0.72 0.12 70));
+  background: linear-gradient(to top, var(--lcd-text), var(--lcd-text-muted));
 }
 
 .trim-control strong {
-  color: var(--text-strong);
+  color: var(--lcd-text);
 }
 
 .parameter-list article {
@@ -1891,16 +1999,37 @@ button:active:not(:disabled) {
 }
 
 .sequencer-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: 0.85rem 1rem;
+  gap: 0.65rem;
+  flex-wrap: wrap;
 }
 
-.sequencer-transport {
-  display: flex;
-  gap: 0.8rem;
+.sequencer-bank-group {
+  display: inline-flex;
   align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.sequencer-bank-buttons {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.sequencer-bank-buttons .bank-button {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
+}
+
+.sequencer-length-field {
+  flex-shrink: 0;
+}
+
+.sequencer-field.sequencer-length-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .sequencer-field {
@@ -1910,9 +2039,9 @@ button:active:not(:disabled) {
 
 .sequencer-field input,
 .sequencer-field select {
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 92%, white);
-  color: var(--text-strong);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text);
   padding: 0.42rem 0.55rem;
   min-width: 6rem;
 }
@@ -1921,7 +2050,7 @@ button:active:not(:disabled) {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0 0.85rem;
+  padding: 0;
 }
 
 .sequence-selector-buttons {
@@ -1931,67 +2060,64 @@ button:active:not(:disabled) {
 }
 
 .sequence-index-button {
-  min-width: 1.85rem;
-  height: 1.85rem;
-  padding: 0 0.35rem;
+  padding: 0.3rem 0.5rem;
   font-size: 0.72rem;
-  font-weight: 600;
-  background: oklch(1 0 0 / 0.4);
-  color: var(--text-muted);
-  box-shadow: inset 0 0 0 1px oklch(0.5 0.02 60 / 0.15);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--lcd-text-muted);
+  box-shadow: inset 0 0 0 1px rgba(122, 138, 90, 0.35);
 }
 
 .sequence-index-button:hover:not(.is-active) {
-  background: oklch(1 0 0 / 0.65);
-  color: var(--text-strong);
+  background: rgba(255, 255, 255, 0.32);
+  color: var(--lcd-text);
 }
 
 .sequence-index-button.is-active {
-  background: linear-gradient(180deg, var(--accent-warm), oklch(0.5 0.12 35));
-  color: oklch(0.98 0.01 80);
+  background: var(--lcd-text);
+  color: var(--lcd-highlight);
   box-shadow:
-    0 1px 3px oklch(0.3 0.08 38 / 0.2),
-    inset 0 1px 0 oklch(1 0 0 / 0.1);
+    0 1px 3px rgba(26, 42, 16, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .sequence-add-button {
-  min-width: 1.85rem;
-  height: 1.85rem;
-  padding: 0 0.35rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  background: oklch(1 0 0 / 0.25);
-  color: var(--text-muted);
-  box-shadow: inset 0 0 0 1px oklch(0.5 0.02 60 / 0.1);
+  padding: 0.3rem 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--lcd-text-muted);
+  box-shadow: inset 0 0 0 1px rgba(122, 138, 90, 0.25);
 }
 
 .sequence-add-button:hover {
-  background: oklch(1 0 0 / 0.5);
-  color: var(--text-strong);
+  background: rgba(255, 255, 255, 0.28);
+  color: var(--lcd-text);
 }
 
 .sequencer-generate-bar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
-  gap: 0.7rem;
+  display: flex;
+  gap: 0.5rem;
   align-items: center;
   min-width: 0;
-  width: min(100%, 38rem);
+  flex: 1 1 0;
 }
 
 .sequencer-prompt-inline {
   display: flex;
   align-items: center;
   min-width: 0;
-  height: 100%;
+  flex: 1 1 0;
 }
 
 .sequencer-prompt-inline input {
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 92%, white);
-  color: var(--text-strong);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text);
   padding: 0.55rem 0.7rem;
 }
 
@@ -2007,32 +2133,29 @@ button:active:not(:disabled) {
 }
 
 .sequencer-generate-button {
-  background: linear-gradient(180deg, var(--accent-warm), oklch(0.5 0.12 35));
-  color: oklch(0.98 0.01 80);
+  background: var(--lcd-text);
+  color: var(--lcd-highlight);
   box-shadow:
-    0 1px 2px oklch(0.3 0.08 38 / 0.25),
-    inset 0 1px 0 oklch(1 0 0 / 0.12);
+    0 1px 2px rgba(26, 42, 16, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .sequencer-generate-button:hover:not(:disabled) {
-  background: linear-gradient(180deg, oklch(0.62 0.15 38), oklch(0.52 0.13 35));
-  color: oklch(0.98 0.01 80);
+  background: #2a3a18;
+  color: var(--lcd-highlight);
   box-shadow:
-    0 2px 6px oklch(0.3 0.08 38 / 0.3),
-    inset 0 1px 0 oklch(1 0 0 / 0.15);
+    0 2px 6px rgba(26, 42, 16, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .sequencer-randomize-button svg {
   flex: none;
 }
 
-.sequencer-bank-switcher {
-  width: min(100%, 28rem);
-}
 
 .sequencer-grid-shell {
-  border: 1px solid var(--panel-border);
-  background: color-mix(in oklch, var(--panel-bg) 95%, white);
+  border: 1px solid var(--lcd-border);
+  background: var(--lcd-highlight);
   height: 32rem;
   overflow: hidden;
 }
@@ -2053,8 +2176,8 @@ button:active:not(:disabled) {
 .sequencer-step-label,
 .sequencer-lane-header,
 .sequencer-step-button {
-  border-right: 1px solid var(--panel-border);
-  border-bottom: 1px solid var(--panel-border);
+  border-right: 1px solid var(--lcd-border);
+  border-bottom: 1px solid var(--lcd-border);
 }
 
 .sequencer-corner {
@@ -2064,8 +2187,8 @@ button:active:not(:disabled) {
   display: grid;
   place-items: center start;
   padding: 0.75rem 0.9rem;
-  background: color-mix(in oklch, var(--panel-bg) 98%, white);
-  color: var(--text-muted);
+  background: var(--lcd-bg);
+  color: var(--lcd-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.72rem;
@@ -2082,18 +2205,18 @@ button:active:not(:disabled) {
   display: grid;
   place-items: center;
   height: 2.5rem;
-  background: color-mix(in oklch, var(--panel-bg) 98%, white);
-  color: var(--text-muted);
+  background: var(--lcd-bg);
+  color: var(--lcd-text-muted);
   font-size: 0.74rem;
 }
 
 .sequencer-step-label.is-accent {
-  color: var(--text-strong);
+  color: var(--lcd-text);
 }
 
 .sequencer-step-label.is-current {
-  background: color-mix(in oklch, var(--accent-gold) 25%, white);
-  color: var(--text-strong);
+  background: rgba(26, 42, 16, 0.15);
+  color: var(--lcd-text);
 }
 
 .sequencer-lane-header {
@@ -2107,7 +2230,7 @@ button:active:not(:disabled) {
   padding: 0.4rem 0.55rem 0.4rem 0.8rem;
   min-width: 0;
   min-height: 3.2rem;
-  background: color-mix(in oklch, var(--panel-bg) 98%, white);
+  background: var(--lcd-bg);
 }
 
 .sequencer-lane-label {
@@ -2138,7 +2261,7 @@ button:active:not(:disabled) {
 }
 
 .sequencer-lane-header.is-selected {
-  background: color-mix(in oklch, var(--accent-gold) 18%, white);
+  background: rgba(26, 42, 16, 0.1);
 }
 
 .sequencer-pad-mute-button {
@@ -2147,8 +2270,8 @@ button:active:not(:disabled) {
   height: 1.4rem;
   padding: 0;
   border-radius: 0.4rem;
-  background: color-mix(in oklch, var(--panel-bg) 86%, white);
-  color: var(--text-muted);
+  background: var(--lcd-highlight);
+  color: var(--lcd-text-muted);
   font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -2175,7 +2298,7 @@ button:active:not(:disabled) {
   margin: 0 auto;
   border-radius: 0.45rem;
   align-self: center;
-  background: color-mix(in oklch, var(--panel-bg) 94%, white);
+  background: var(--lcd-highlight);
 }
 
 .sequencer-step-note {
@@ -2183,24 +2306,24 @@ button:active:not(:disabled) {
   line-height: 1;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: var(--text-strong);
+  color: var(--lcd-text);
 }
 
 .sequencer-step-button.is-accent {
-  background: color-mix(in oklch, var(--panel-bg) 88%, var(--accent-gold) 12%);
+  background: #c0cc9e;
 }
 
 .sequencer-step-button.is-active {
-  background: color-mix(in oklch, var(--accent-warm) 55%, white);
+  background: var(--lcd-text);
 }
 
 .sequencer-step-button.is-current {
-  outline: 2px solid color-mix(in oklch, var(--accent-gold) 60%, white);
+  outline: 2px solid var(--lcd-text);
   outline-offset: -2px;
 }
 
 .sequencer-step-button.is-active.is-current {
-  background: linear-gradient(180deg, var(--accent-warm), color-mix(in oklch, var(--accent-gold) 55%, var(--accent-warm)));
+  background: var(--lcd-text);
 }
 
 @media (max-width: 1080px) {
@@ -2356,7 +2479,11 @@ button:active:not(:disabled) {
   }
 
   .mixer-bank-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .mixer-export-strip {
+    grid-column: span 4;
   }
 
   .mixer-pad-grid {

@@ -44,7 +44,7 @@ export function EffectsWorkspace({
         </label>
         <button
           type="button"
-          className={effectEnabled ? 'primary-button' : 'secondary-button'}
+          className={effectEnabled ? 'work-tab is-current' : 'work-tab'}
           onClick={onToggleEnabled}
         >
           {effectEnabled ? 'Bypass Effect' : 'Engage Effect'}
@@ -79,7 +79,6 @@ export function EffectsWorkspace({
               )
             })}
           </div>
-          <p className="effects-note">All listed effects are live on sampler pad playback now. Loop preview is still dry in this pass, and some of the more complex processors are pragmatic Web Audio versions for now.</p>
         </>
       ) : null}
     </div>

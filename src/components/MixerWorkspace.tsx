@@ -101,21 +101,20 @@ export function MixerWorkspace({
               <Slider.Thumb className="trim-slider-thumb" aria-label="Master volume" />
             </Slider.Root>
           </div>
-          <div className="mixer-strip mixer-export-strip">
-            <span className="transport-label">Sequence</span>
+          <div className="mixer-export-strip">
+            <span className="transport-label">Export</span>
             <div className="mixer-export-panel">
               <button
                 type="button"
-                className="secondary-button mixer-export-button"
+                className="work-tab mixer-export-button"
                 onClick={onExportSequence}
                 disabled={isExportingSequence}
               >
-                <Download size={15} strokeWidth={2.1} aria-hidden="true" />
+                <Download size={13} strokeWidth={2.1} aria-hidden="true" />
                 <span>{isExportingSequence ? 'Rendering...' : 'Export WAV'}</span>
               </button>
               <p className="mixer-export-note">{sequenceExportMessage}</p>
             </div>
-            <span className="mixer-export-caption">All audible banks</span>
           </div>
         </div>
       </div>

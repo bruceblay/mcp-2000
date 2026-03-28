@@ -65,6 +65,23 @@ export function SequenceWorkspace({
   return (
     <div className="work-surface sequencer-surface" aria-label="Sequence workspace">
       <div className="sequencer-toolbar">
+        <div className="sequencer-bank-group">
+          <span className="transport-label">Bank</span>
+          <div className="sequencer-bank-buttons" role="tablist" aria-label="Sequence banks">
+            {bankIds.map((bankId) => (
+              <button
+                key={`sequencer-bank-${bankId}`}
+                type="button"
+                role="tab"
+                aria-selected={currentBankId === bankId}
+                className={currentBankId === bankId ? 'bank-button is-current' : 'bank-button'}
+                onClick={() => onSwitchBank(bankId)}
+              >
+                {bankId}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="sequencer-generate-bar">
           <div className="sequencer-prompt-inline">
             <input
@@ -81,7 +98,7 @@ export function SequenceWorkspace({
             onClick={onGenerateSequence}
             disabled={sequenceGenerationStatus === 'generating'}
           >
-            {sequenceGenerationStatus === 'generating' && sequenceGenerationAction === 'generate' ? 'Generating...' : 'Generate Sequence'}
+            {sequenceGenerationStatus === 'generating' && sequenceGenerationAction === 'generate' ? 'Generating...' : 'Generate'}
           </button>
           <button
             type="button"
@@ -90,12 +107,9 @@ export function SequenceWorkspace({
             disabled={sequenceGenerationStatus === 'generating'}
           >
             {sequenceGenerationStatus === 'generating' && sequenceGenerationAction === 'randomize' ? (
-              <span>Randomizing...</span>
+              <span>...</span>
             ) : (
-              <>
-                <Dices size={14} strokeWidth={2.2} aria-hidden="true" />
-                <span>Randomize</span>
-              </>
+              <Dices size={14} strokeWidth={2.2} aria-hidden="true" />
             )}
           </button>
           <button
@@ -107,35 +121,16 @@ export function SequenceWorkspace({
             Clear
           </button>
         </div>
-        <div className="sequencer-transport">
-          <label className="sequencer-field">
-            <span className="transport-label">Length</span>
-            <select value={currentSequenceLength} onChange={(event) => onUpdateSequenceLength(Number(event.target.value))}>
-              {sequenceLengthOptions.map((length) => (
-                <option key={length} value={length}>
-                  {length} steps
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-      </div>
-
-      <div className="bank-switcher sequencer-bank-switcher" aria-label="Sequence banks">
-        <div className="bank-buttons" role="tablist" aria-label="Sequence banks">
-          {bankIds.map((bankId) => (
-            <button
-              key={`sequencer-bank-${bankId}`}
-              type="button"
-              role="tab"
-              aria-selected={currentBankId === bankId}
-              className={currentBankId === bankId ? 'bank-button is-current' : 'bank-button'}
-              onClick={() => onSwitchBank(bankId)}
-            >
-              Bank {bankId}
-            </button>
-          ))}
-        </div>
+        <label className="sequencer-field sequencer-length-field">
+          <span className="transport-label">Length</span>
+          <select value={currentSequenceLength} onChange={(event) => onUpdateSequenceLength(Number(event.target.value))}>
+            {sequenceLengthOptions.map((length) => (
+              <option key={length} value={length}>
+                {length}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="sequence-selector" aria-label="Sequence selector">
