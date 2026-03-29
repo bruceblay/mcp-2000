@@ -13,15 +13,15 @@
   --panel-bg: #ddd7cb;
   --panel-border: #b5ae9f;
   --text-strong: #1e1a16;
-  --text-muted: #6b6158;
+  --text-muted: #5c3044;
   --accent-warm: #3d506e;
   --accent-gold: #6a7a8e;
 
   --pad-bg: #b0aaa2;
   --pad-bg-hover: #bab4ac;
   --pad-border: #c8c2b8;
-  --pad-text: #3a3632;
-  --pad-text-muted: #706860;
+  --pad-text: #5c3044;
+  --pad-text-muted: #5c3044;
 
   --lcd-bg: #b8c490;
   --lcd-text: #1a2a10;
@@ -100,7 +100,7 @@ button:active:not(:disabled) {
 
 .pads .panel-kicker,
 .prompt-panel .panel-kicker {
-  color: #c08080;
+  color: #5c3044;
 }
 
 .panel-heading h2 {
@@ -264,6 +264,12 @@ button:active:not(:disabled) {
 .transport-button svg {
   display: block;
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.transport-button:active:not(:disabled) {
+  transform: none;
 }
 
 .transport-field {
@@ -306,9 +312,9 @@ button:active:not(:disabled) {
 
 .transport-button.is-active,
 .transport-button[aria-pressed='true'] {
-  background: var(--accent-warm);
-  box-shadow: inset 0 0 0 1px var(--accent-warm);
-  color: #e0e4ea;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.15);
+  color: #c43535;
 }
 
 .work-area-tabs {
@@ -367,7 +373,7 @@ button:active:not(:disabled) {
 
 .work-surface {
   display: grid;
-  gap: 1rem;
+  gap: 0.6rem;
   padding: 1rem;
   font-family: "SF Mono", "Cascadia Mono", "Consolas", "Menlo", monospace;
   color: var(--lcd-text);
@@ -384,7 +390,7 @@ button:active:not(:disabled) {
 }
 
 .work-area-toolbar .eyebrow {
-  color: #c08080;
+  color: #5c3044;
 }
 
 .work-surface input,
@@ -753,8 +759,9 @@ button:active:not(:disabled) {
 
 .effects-chain-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(11rem, 1fr));
   gap: 0.6rem;
+  overflow-x: auto;
 }
 
 .effect-chain-column {
@@ -764,6 +771,8 @@ button:active:not(:disabled) {
   padding: 0.55rem;
   background: var(--lcd-highlight);
   border-radius: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .effect-chain-label {
@@ -778,6 +787,7 @@ button:active:not(:disabled) {
   display: flex;
   gap: 0.4rem;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .effect-chain-header select {
@@ -831,6 +841,25 @@ button:active:not(:disabled) {
   font-weight: 600;
   color: var(--lcd-text);
   text-align: center;
+}
+
+.knob-compact {
+  grid-template-columns: auto auto;
+  grid-template-rows: auto auto;
+  width: auto;
+  gap: 0 0.25rem;
+}
+
+.knob-compact .knob-svg {
+  grid-row: 1 / -1;
+}
+
+.knob-compact .knob-label,
+.knob-compact .knob-value {
+  text-align: left;
+  align-self: center;
+  min-width: 3rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .mixer-surface {
@@ -1072,30 +1101,30 @@ button:active:not(:disabled) {
 
 .editor-pad-footer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(10rem, 12rem);
-  gap: 0.85rem 1.2rem;
-  padding: 0.9rem 0 0;
+  gap: 0.85rem;
   align-items: start;
 }
 
 .editor-pad-controls {
-  display: grid;
-  grid-template-columns: max-content;
-  grid-template-areas:
-    "modes"
-    "sliders";
-  gap: 0.85rem 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
   background: transparent;
-  align-items: start;
+  align-items: center;
   min-width: 0;
 }
 
 .editor-pad-controls.is-chromatic-active {
-  grid-template-columns: max-content minmax(0, 30rem);
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   grid-template-areas:
     "modes keys"
-    "sliders keys";
+    "info keys";
   align-items: start;
+}
+
+.editor-pad-controls.is-chromatic-active .editor-info-knobs {
+  margin-left: 0;
 }
 
 .editor-pad-meta {
@@ -1109,13 +1138,14 @@ button:active:not(:disabled) {
 
 .editor-pad-meta article {
   display: grid;
-  gap: 0.2rem;
+  gap: 0.1rem;
   min-width: 0;
   width: 100%;
 }
 
 .editor-pad-meta strong {
-  color: var(--text-strong);
+  color: var(--lcd-text);
+  font-size: 0.78rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1125,6 +1155,10 @@ button:active:not(:disabled) {
   grid-area: modes;
   gap: 0.5rem;
   align-items: center;
+}
+
+.editor-pad-controls:not(.is-chromatic-active) .editor-info-knobs {
+  margin-left: auto;
 }
 
 .chromatic-mode-button {
@@ -1158,6 +1192,40 @@ button:active:not(:disabled) {
   justify-content: start;
 }
 
+.editor-info-knobs {
+  grid-area: info;
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.editor-info-knobs .editor-pad-meta {
+  width: auto;
+  flex-shrink: 0;
+  justify-self: auto;
+  display: flex;
+  gap: 0.6rem;
+}
+
+.editor-info-knobs .editor-pad-meta article {
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+  width: auto;
+}
+
+.editor-pad-controls.is-chromatic-active .editor-info-knobs .editor-pad-meta {
+  display: grid;
+  width: 9rem;
+  gap: 0.55rem;
+}
+
+.editor-pad-controls.is-chromatic-active .editor-info-knobs .editor-pad-meta article {
+  display: grid;
+  gap: 0.1rem;
+  width: 100%;
+}
+
 .editor-trim-controls .trim-control {
   padding: 0;
   min-width: 0;
@@ -1168,8 +1236,8 @@ button:active:not(:disabled) {
 .editor-chromatic-panel {
   grid-area: keys;
   width: 100%;
-  max-width: 100%;
-  justify-self: stretch;
+  max-width: 700px;
+  justify-self: center;
   display: grid;
   gap: 0.55rem;
   padding: 0 0.8rem 0.8rem;
@@ -1491,7 +1559,7 @@ button:active:not(:disabled) {
 }
 
 .prompt-field span {
-  font-size: 0.95rem;
+  font-size: 0.78rem;
 }
 
 .prompt-field textarea {
@@ -1551,7 +1619,7 @@ button:active:not(:disabled) {
 }
 
 .secondary-button:hover:not(:disabled) {
-  background: oklch(1 0 0 / 0.65);
+  background: #ded8ce;
   color: var(--text-strong);
 }
 
@@ -1723,16 +1791,8 @@ button:active:not(:disabled) {
   width: 0.46rem;
   height: 0.46rem;
   border-radius: 999px;
-  background: color-mix(in oklch, var(--text-muted) 60%, white);
-  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.28);
+  background: #c08080;
   flex-shrink: 0;
-}
-
-.midi-toggle-indicator.is-live {
-  background: var(--accent-warm);
-  box-shadow:
-    0 0 0 0.08rem rgba(61, 80, 110, 0.2),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.15);
 }
 
 .pads .bank-switcher {
@@ -1740,13 +1800,24 @@ button:active:not(:disabled) {
 }
 
 .midi-panel {
-  display: grid;
-  gap: 0.7rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
   margin-bottom: 0.8rem;
-  padding: 0.8rem 0.85rem;
+  padding: 0.6rem 0.7rem;
   border: none;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.3);
+}
+
+.midi-device-select {
+  border: none;
+  background: #d5cfc5;
+  color: var(--text-strong);
+  padding: 0.28rem 0.5rem;
+  font-size: 0.68rem;
+  min-width: 8rem;
 }
 
 [data-theme="dark"] .midi-panel {
@@ -1806,7 +1877,7 @@ button:active:not(:disabled) {
 .midi-device-field select {
   width: 100%;
   border: none;
-  background: #eae6de;
+  background: #d5cfc5;
   color: var(--text-strong);
   padding: 0.42rem 0.52rem;
 }
@@ -2590,12 +2661,17 @@ button:active:not(:disabled) {
 
 @media (max-width: 1080px) {
   .work-area-toolbar {
-    grid-template-columns: 1fr;
-    align-items: start;
+    grid-template-columns: auto 1fr;
+    gap: 0.6rem;
   }
 
   .work-area-transport {
-    justify-self: start;
+    justify-self: end;
+  }
+
+  .work-area-tabs {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 
   .sequencer-toolbar {
@@ -2635,9 +2711,70 @@ button:active:not(:disabled) {
   .grid-panel {
     order: 0;
   }
+
+}
+
+@media (max-width: 830px) {
+  .editor-pad-controls.is-chromatic-active {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "modes"
+      "info"
+      "keys";
+  }
+
+  .editor-pad-controls.is-chromatic-active .editor-info-knobs {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 885px) {
+  .editor-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "tabs tabs"
+      "transform export";
+    gap: 0.5rem;
+  }
+
+  .editor-source-tabs {
+    grid-area: tabs;
+  }
+
+  .editor-transform-bar {
+    grid-area: transform;
+    min-width: 0;
+  }
+
+  .editor-toolbar-actions {
+    grid-area: export;
+  }
 }
 
 @media (max-width: 720px) {
+  .sequencer-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+  }
+
+  .sequencer-bank-group {
+    order: 0;
+  }
+
+  .sequence-selector {
+    order: 1;
+  }
+
+  .sequencer-generate-bar {
+    order: 2;
+    flex: 1 1 100%;
+  }
+
+  .sequencer-length-field {
+    order: 3;
+  }
+
   .app-shell {
     width: min(calc(100% - 1rem), var(--page-max-width));
   }
@@ -2653,7 +2790,7 @@ button:active:not(:disabled) {
   }
 
   .pad-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .midi-panel {
@@ -2664,57 +2801,27 @@ button:active:not(:disabled) {
     align-items: stretch;
   }
 
-  .editor-pad-footer {
-    grid-template-columns: 1fr;
-  }
 
-  .editor-pad-controls {
-    grid-template-columns: 1fr;
+  .editor-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto;
     grid-template-areas:
-      "modes"
-      "sliders";
+      "tabs tabs"
+      "transform export";
+    gap: 0.5rem;
   }
 
-  .editor-pad-controls.is-chromatic-active {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "modes"
-      "sliders"
-      "keys";
-  }
-
-  .editor-toolbar-actions {
-    width: 100%;
-    margin-left: 0;
-    justify-content: flex-start;
+  .editor-source-tabs {
+    grid-area: tabs;
   }
 
   .editor-transform-bar {
-    width: 100%;
+    grid-area: transform;
     min-width: 0;
-    grid-template-columns: 1fr;
   }
 
-  .editor-pad-meta {
-    width: 100%;
-    justify-self: stretch;
-  }
-
-  .editor-trim-controls {
-    grid-template-columns: 1fr;
-  }
-
-  .editor-chromatic-toolbar {
-    align-items: stretch;
-  }
-
-  .editor-chromatic-octave {
-    justify-content: space-between;
-    width: 100%;
-  }
-
-  .editor-chromatic-keyboard {
-    min-height: 4.8rem;
+  .editor-toolbar-actions {
+    grid-area: export;
   }
 
   .editor-chromatic-white-keys {
@@ -2844,9 +2951,7 @@ button:active:not(:disabled) {
 
 [data-theme="dark"] .transport-button.is-active,
 [data-theme="dark"] .transport-button[aria-pressed='true'] {
-  background: rgba(224, 204, 112, 0.12);
-  box-shadow: inset 0 0 0 1px var(--dark-yellow);
-  color: var(--dark-yellow);
+  color: #c43535;
 }
 
 :root {

@@ -2,6 +2,7 @@ import { Download } from 'lucide-react'
 import * as Slider from '@radix-ui/react-slider'
 import { bankIds, type BankId, type BankState } from '../types'
 import type { Pad } from '../mock-kit'
+import { Knob } from './Knob'
 
 type MixerWorkspaceProps = {
   bankMixerGains: Record<BankId, number>
@@ -158,22 +159,16 @@ export function MixerWorkspace({
                   <Slider.Thumb className="trim-slider-thumb" aria-label={`${pad.label} gain`} />
                 </Slider.Root>
                 <span className="mixer-strip-name">{pad.sampleName}</span>
-                <div className="trim-control mixer-pan-control">
-                  <span>Pan</span>
-                  <Slider.Root
-                    className="trim-slider-root mixer-pan-slider single-thumb"
-                    min={-1}
-                    max={1}
-                    step={0.01}
-                    value={[padPanLevel]}
-                    onValueChange={([value]) => onPadPanChange(pad.id, value)}
-                  >
-                    <Slider.Track className="trim-slider-track">
-                      <Slider.Range className="trim-slider-range" />
-                    </Slider.Track>
-                    <Slider.Thumb className="trim-slider-thumb" aria-label={`${pad.label} pan`} />
-                  </Slider.Root>
-                </div>
+                <Knob
+                  bipolar
+                  value={padPanLevel}
+                  min={-1}
+                  max={1}
+                  step={0.01}
+                  label="Pan"
+                  formatValue={(v) => v === 0 ? 'C' : v < 0 ? `L${Math.round(Math.abs(v) * 100)}` : `R${Math.round(v * 100)}`}
+                  onChange={(v) => onPadPanChange(pad.id, v)}
+                />
               </div>
             )
           })}

@@ -4,7 +4,6 @@
 - isolate sounds or instruments on an input sample (9)
 - recorded logs of what other people are prompting (4)
 - analytics (5)
-- fx sequencer?
 - sample envelope (4)
 - drag/drop sound file onto sample editor to display it on loop edit view
 - key and scale selection?  these get auto fed into our generative tool calls

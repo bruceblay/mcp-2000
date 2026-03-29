@@ -131,9 +131,7 @@ export function SequenceWorkspace({
             ))}
           </select>
         </label>
-      </div>
-
-      <div className="sequence-selector" aria-label="Sequence selector">
+        <div className="sequence-selector" aria-label="Sequence selector">
         <span className="transport-label">Sequence</span>
         <div className="sequence-selector-buttons">
           {Array.from({ length: sequenceCount }, (_, index) => (
@@ -157,6 +155,7 @@ export function SequenceWorkspace({
             </button>
           )}
         </div>
+      </div>
       </div>
 
       <div className="sequencer-grid-shell">

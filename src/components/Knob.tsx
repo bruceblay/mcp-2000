@@ -6,6 +6,8 @@ type KnobProps = {
   max: number
   step: number
   label: string
+  compact?: boolean
+  bipolar?: boolean
   formatValue?: (value: number) => string
   onChange: (value: number) => void
 }
@@ -20,13 +22,16 @@ const polarToCartesian = (cx: number, cy: number, r: number, angleDeg: number) =
 }
 
 const describeArc = (cx: number, cy: number, r: number, startDeg: number, endDeg: number) => {
-  const start = polarToCartesian(cx, cy, r, endDeg)
-  const end = polarToCartesian(cx, cy, r, startDeg)
-  const largeArc = endDeg - startDeg > 180 ? 1 : 0
+  if (Math.abs(endDeg - startDeg) < 0.5) return ''
+  const lo = Math.min(startDeg, endDeg)
+  const hi = Math.max(startDeg, endDeg)
+  const start = polarToCartesian(cx, cy, r, hi)
+  const end = polarToCartesian(cx, cy, r, lo)
+  const largeArc = hi - lo > 180 ? 1 : 0
   return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`
 }
 
-export function Knob({ value, min, max, step, label, formatValue, onChange }: KnobProps) {
+export function Knob({ value, min, max, step, label, compact, bipolar, formatValue, onChange }: KnobProps) {
   const dragRef = useRef<{ startY: number; startValue: number } | null>(null)
 
   const snap = useCallback(
@@ -58,6 +63,7 @@ export function Knob({ value, min, max, step, label, formatValue, onChange }: Kn
   const fraction = (value - min) / (max - min)
   const valueAngle = START_ANGLE + fraction * SWEEP_DEGREES
   const endAngle = START_ANGLE + SWEEP_DEGREES
+  const centerAngle = START_ANGLE + SWEEP_DEGREES / 2
 
   const cx = 20
   const cy = 20
@@ -69,10 +75,11 @@ export function Knob({ value, min, max, step, label, formatValue, onChange }: Kn
   const displayValue = formatValue ? formatValue(value) : String(value)
 
   return (
-    <div className="knob">
+    <div className={compact ? 'knob knob-compact' : 'knob'}>
       <svg
         className="knob-svg"
         viewBox="0 0 40 40"
+        style={bipolar ? { transform: 'rotate(90deg)' } : undefined}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -85,14 +92,28 @@ export function Knob({ value, min, max, step, label, formatValue, onChange }: Kn
           strokeWidth="3"
           strokeLinecap="round"
         />
-        {fraction > 0.005 && (
-          <path
-            d={describeArc(cx, cy, r, START_ANGLE, valueAngle)}
-            fill="none"
-            stroke="var(--lcd-text)"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
+        {bipolar ? (
+          valueAngle !== centerAngle ? (
+            <path
+              d={valueAngle > centerAngle
+                ? describeArc(cx, cy, r, centerAngle, valueAngle)
+                : describeArc(cx, cy, r, valueAngle, centerAngle)}
+              fill="none"
+              stroke="var(--lcd-text)"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          ) : null
+        ) : (
+          fraction > 0.005 ? (
+            <path
+              d={describeArc(cx, cy, r, START_ANGLE, valueAngle)}
+              fill="none"
+              stroke="var(--lcd-text)"
+              strokeWidth="3"
+              strokeLinecap="round"
+            />
+          ) : null
         )}
         <line
           x1={pointerInner.x}

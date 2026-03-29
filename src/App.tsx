@@ -43,6 +43,7 @@ import { EffectsWorkspace } from './components/EffectsWorkspace'
 import { MixerWorkspace } from './components/MixerWorkspace'
 import { SequenceWorkspace } from './components/SequenceWorkspace'
 import { GenerationPanel } from './components/GenerationPanel'
+import { Knob } from './components/Knob'
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -2795,6 +2796,25 @@ function App() {
     }
   }
 
+  const disableMidiInput = () => {
+    if (midiAccessRef.current) {
+      midiAccessRef.current.onstatechange = null
+      for (const input of midiAccessRef.current.inputs.values()) {
+        input.onmidimessage = null
+      }
+      midiAccessRef.current = null
+    }
+    releaseAllMappedMidiNotes()
+    activeMidiNotesRef.current.clear()
+    setAvailableMidiInputs([])
+    setSelectedMidiInputId(null)
+    selectedMidiInputIdRef.current = null
+    setMidiLearnPadId(null)
+    midiLearnPadIdRef.current = null
+    setMidiAccessState('idle')
+    setMidiStatusMessage('Enable MIDI to map controller notes to the pad grid.')
+  }
+
   const toggleMidiLearnForPad = (pad: Pad) => {
     const nextLearnPadId = midiLearnPadIdRef.current === pad.id ? null : pad.id
     midiLearnPadIdRef.current = nextLearnPadId
@@ -3955,13 +3975,9 @@ function App() {
             <button
               type="button"
               className={isSequencePlaying ? 'primary-button transport-button is-active' : 'secondary-button transport-button'}
-              onClick={() => {
-                if (!isSequencePlaying) {
-                  void toggleSequencePlayback()
-                }
-              }}
-              aria-label="Play"
-              title="Play"
+              onClick={() => { void toggleSequencePlayback() }}
+              aria-label={isSequencePlaying ? 'Stop' : 'Play'}
+              title={isSequencePlaying ? 'Stop' : 'Play'}
             >
               <Play size={21} strokeWidth={2.1} aria-hidden="true" />
             </button>
@@ -4199,66 +4215,48 @@ function App() {
                       </button>
                     </div>
 
-                    <div className="trim-controls editor-trim-controls">
-                      <div className="trim-control">
-                        <span>Pitch</span>
-                        <Slider.Root
-                          className="trim-slider-root single-thumb"
-                          min={-12}
-                          max={12}
-                          step={1}
-                          value={[semitoneOffset]}
-                          onValueChange={([value]) => updateSemitoneOffset(selectedPad.id, value)}
-                        >
-                          <Slider.Track className="trim-slider-track">
-                            <Slider.Range className="trim-slider-range" />
-                          </Slider.Track>
-                          <Slider.Thumb className="trim-slider-thumb" aria-label="Pitch" />
-                        </Slider.Root>
-                        <div className="trim-readout single-value">
-                          <strong>{semitoneOffset > 0 ? '+' : ''}{semitoneOffset} st</strong>
-                        </div>
+                    <div className="editor-info-knobs">
+                      <div className="editor-pad-meta">
+                        <article>
+                          <span className="transport-label">Pad</span>
+                          <strong>{selectedPad.label}</strong>
+                        </article>
+                        <article>
+                          <span className="transport-label">File</span>
+                          <strong title={selectedPad.sampleFile}>{selectedPad.sampleFile}</strong>
+                        </article>
                       </div>
-
-                      <div className="trim-control">
-                        <span>Gain</span>
-                        <Slider.Root
-                          className="trim-slider-root single-thumb"
-                          min={0}
-                          max={1.5}
-                          step={0.01}
-                          value={[padGain]}
-                          onValueChange={([value]) => updatePadGain(selectedPad.id, value)}
-                        >
-                          <Slider.Track className="trim-slider-track">
-                            <Slider.Range className="trim-slider-range" />
-                          </Slider.Track>
-                          <Slider.Thumb className="trim-slider-thumb" aria-label="Gain" />
-                        </Slider.Root>
-                        <div className="trim-readout single-value">
-                          <strong>{padGain.toFixed(2)}</strong>
-                        </div>
-                      </div>
-
-                      <div className="trim-control">
-                        <span>Pan</span>
-                        <Slider.Root
-                          className="trim-slider-root single-thumb"
-                          min={-1}
-                          max={1}
-                          step={0.01}
-                          value={[padPan]}
-                          onValueChange={([value]) => updatePadPan(selectedPad.id, value)}
-                        >
-                          <Slider.Track className="trim-slider-track">
-                            <Slider.Range className="trim-slider-range" />
-                          </Slider.Track>
-                          <Slider.Thumb className="trim-slider-thumb" aria-label="Pan" />
-                        </Slider.Root>
-                        <div className="trim-readout single-value">
-                          <strong>{padPan === 0 ? 'C' : padPan < 0 ? `L ${Math.round(Math.abs(padPan) * 100)}` : `R ${Math.round(padPan * 100)}`}</strong>
-                        </div>
-                      </div>
+                      <Knob
+                        compact
+                        value={semitoneOffset}
+                        min={-12}
+                        max={12}
+                        step={1}
+                        label="Pitch"
+                        formatValue={(v) => `${v > 0 ? '+' : ''}${v} st`}
+                        onChange={(v) => updateSemitoneOffset(selectedPad.id, v)}
+                      />
+                      <Knob
+                        compact
+                        value={padGain}
+                        min={0}
+                        max={1.5}
+                        step={0.01}
+                        label="Gain"
+                        formatValue={(v) => v.toFixed(2)}
+                        onChange={(v) => updatePadGain(selectedPad.id, v)}
+                      />
+                      <Knob
+                        compact
+                        bipolar
+                        value={padPan}
+                        min={-1}
+                        max={1}
+                        step={0.01}
+                        label="Pan"
+                        formatValue={(v) => v === 0 ? 'C' : v < 0 ? `L ${Math.round(Math.abs(v) * 100)}` : `R ${Math.round(v * 100)}`}
+                        onChange={(v) => updatePadPan(selectedPad.id, v)}
+                      />
                     </div>
 
                     {isChromaticModeActive ? (
@@ -4401,16 +4399,6 @@ function App() {
                     ) : null}
                   </div>
 
-                  <div className="editor-pad-meta">
-                    <article>
-                      <span className="transport-label">Pad</span>
-                      <strong>{selectedPad.label}</strong>
-                    </article>
-                    <article>
-                      <span className="transport-label">File</span>
-                      <strong title={selectedPad.sampleFile}>{selectedPad.sampleFile}</strong>
-                    </article>
-                  </div>
                 </div>
               ) : null}
               {editorSource === 'loop' && generatedLoop ? (
@@ -4603,68 +4591,50 @@ function App() {
 
           {isMidiPanelOpen ? (
             <div className="midi-panel" id="pads-midi-panel">
-              <div className="midi-panel-header">
-                <div className="midi-panel-title">
-                  <span className="transport-label">MIDI Input</span>
-                  <strong>
-                    {midiAccessState === 'connecting'
-                      ? 'Requesting Access'
-                      : selectedMidiInputId
-                        ? availableMidiInputs.find((input) => input.id === selectedMidiInputId)?.name ?? 'Controller Ready'
-                        : midiSupported
-                          ? 'Not Connected'
-                          : 'Unsupported'}
-                  </strong>
-                </div>
+              {midiAccessState === 'ready' ? (
+                <>
+                  <button type="button" className="midi-toggle-button midi-connect-button" onClick={disableMidiInput}>
+                    Disable
+                  </button>
+                  <button type="button" className="midi-toggle-button midi-connect-button" onClick={() => { void enableMidiInput() }}>
+                    Rescan
+                  </button>
+                </>
+              ) : (
                 <button
                   type="button"
-                  className={midiAccessState === 'ready' ? 'secondary-button midi-connect-button' : 'primary-button midi-connect-button'}
-                  onClick={() => {
-                    void enableMidiInput()
-                  }}
+                  className="midi-toggle-button midi-connect-button"
+                  onClick={() => { void enableMidiInput() }}
                   disabled={midiAccessState === 'connecting'}
                 >
-                  {midiAccessState === 'connecting' ? 'Connecting...' : midiAccessState === 'ready' ? 'Rescan MIDI' : 'Enable MIDI'}
+                  {midiAccessState === 'connecting' ? 'Connecting...' : 'Enable'}
                 </button>
-              </div>
-
-              <div className="midi-panel-controls">
-                <label className="midi-device-field">
-                  <span className="transport-label">Device</span>
-                  <select
-                    value={selectedMidiInputId ?? ''}
-                    onChange={(event) => handleMidiInputSelection(event.target.value || null)}
-                    disabled={!midiSupported || availableMidiInputs.length === 0}
-                  >
-                    {availableMidiInputs.length === 0 ? (
-                      <option value="">No MIDI inputs</option>
-                    ) : (
-                      availableMidiInputs.map((input) => (
-                        <option key={input.id} value={input.id}>
-                          {input.name}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </label>
-
-                <div className="midi-panel-flags">
-                  <span className={selectedMidiInputId ? 'midi-panel-flag is-active' : 'midi-panel-flag'}>
-                    {selectedMidiInputId ? 'Live' : 'Idle'}
-                  </span>
-                  {midiLearnPadId ? (
-                    <button
-                      type="button"
-                      className="secondary-button midi-learn-cancel"
-                      onClick={cancelMidiLearn}
-                    >
-                      Cancel Learn
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-
-              <p className="midi-panel-note">{midiPanelMessage}</p>
+              )}
+              <select
+                className="midi-device-select"
+                value={selectedMidiInputId ?? ''}
+                onChange={(event) => handleMidiInputSelection(event.target.value || null)}
+                disabled={!midiSupported || availableMidiInputs.length === 0}
+              >
+                {availableMidiInputs.length === 0 ? (
+                  <option value="">No MIDI inputs</option>
+                ) : (
+                  availableMidiInputs.map((input) => (
+                    <option key={input.id} value={input.id}>
+                      {input.name}
+                    </option>
+                  ))
+                )}
+              </select>
+              {midiLearnPadId ? (
+                <button
+                  type="button"
+                  className="midi-toggle-button midi-learn-cancel"
+                  onClick={cancelMidiLearn}
+                >
+                  Cancel Learn
+                </button>
+              ) : null}
             </div>
           ) : null}
 
