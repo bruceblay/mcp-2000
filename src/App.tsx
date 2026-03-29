@@ -2,10 +2,11 @@ import { Fragment, startTransition, useEffect, useEffectEvent, useMemo, useRef, 
 import { ChevronLeft, ChevronRight, Circle, Dices, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import * as Slider from '@radix-ui/react-slider'
 import { AnimatePresence, motion } from 'framer-motion'
+import JSZip from 'jszip'
 import { type BankKitId, type Pad, type PadSourceType } from './mock-kit'
 import { starterBankPads } from './kit-generation'
 import { SampleWaveform, type WaveformRegion } from './components/sample-waveform'
-import { getEffectConfig, getEffectDefaults, getEffectsList, type EffectConfig } from './effects'
+import { getEffectDefaults, getEffectsList } from './effects'
 import {
   loopChopCount, midiStorageKey, midiSelectedInputStorageKey,
   promptPresets, groupLabels, chromaticBaseOctave, chromaticMinOctave, chromaticMaxOctave,
@@ -19,7 +20,7 @@ import {
   type EditorTransformResponse, type ChopRegion, type BitcrusherProcessorNode, type ActiveEffectRuntime,
   type ActivePadAudio, type ActiveChromaticNoteAudio, type ActiveLoopPlayback, type MidiPadNoteMappings,
   type NavigatorWithMidi, type PadPlaybackSetting, type BankState, type Sequence,
-  type ArpMode, type ArpDivision,
+  type ArpMode, type ArpDivision, type EffectChainState, type EffectChainSlotId, effectChainSlotIds,
 } from './types'
 import {
   clamp, buildDistortionCurve, buildImpulseResponse, createReversedBuffer,
@@ -34,6 +35,7 @@ import { getChromaticRelativeSemitone, getChromaticNoteLabel, buildChromaticNote
 import {
   createInitialBankMixerGains, createInitialBankToggleState, getEffectiveBankGain,
   createInitialBanksState, createInitialSequence, getActiveSequence,
+  createInitialEffectChain, createInitialBankEffects,
   readStoredMidiPadMappings, readStoredMidiInputId,
 } from './state-init'
 import { createGlobalEffectRouting } from './effects-routing'
@@ -43,6 +45,7 @@ import { SequenceWorkspace } from './components/SequenceWorkspace'
 import { GenerationPanel } from './components/GenerationPanel'
 
 function App() {
+  const [isDarkMode, setIsDarkMode] = useState(false)
   const [currentBankId, setCurrentBankId] = useState<BankId>('A')
   const [bankStates, setBankStates] = useState<Record<BankId, BankState>>(() => createInitialBanksState())
   const [bankMixerGains, setBankMixerGains] = useState<Record<BankId, number>>(() => createInitialBankMixerGains())
@@ -52,7 +55,7 @@ function App() {
   const [activePadIds, setActivePadIds] = useState<string[]>([])
   const [engineStatus, setEngineStatus] = useState<EngineStatus>('idle')
   const [, setLoadedPadCount] = useState(0)
-  const [promptText, setPromptText] = useState(promptPresets[0])
+  const [promptText, setPromptText] = useState('')
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle')
   const [generationMode, setGenerationMode] = useState<GenerationMode>('kit')
   const [generationMessage, setGenerationMessage] = useState('Generate a full 16-pad bank or a loop for chopping.')
@@ -60,7 +63,7 @@ function App() {
   const [micCaptureMessage, setMicCaptureMessage] = useState('Capture a raw take from your microphone, then load it into a pad or the editor.')
   const [recordedTake, setRecordedTake] = useState<RecordedTake | null>(null)
   const [recordingElapsedMs, setRecordingElapsedMs] = useState(0)
-  const [sequencePromptText, setSequencePromptText] = useState('Boom bap pattern with swung hats, snare on the backbeat, and sparse percussion fills')
+  const [sequencePromptText, setSequencePromptText] = useState('')
   const [sequenceGenerationStatus, setSequenceGenerationStatus] = useState<GenerationStatus>('idle')
   const [sequenceGenerationAction, setSequenceGenerationAction] = useState<SequenceGenerationAction | null>(null)
   const [, setSequenceGenerationMessage] = useState('Describe the groove you want and the app will build a pattern for the current bank.')
@@ -92,9 +95,8 @@ function App() {
   const [isRecordArmed, setIsRecordArmed] = useState(false)
   const [isSequencePlaying, setIsSequencePlaying] = useState(false)
   const [sequencePlayheadStep, setSequencePlayheadStep] = useState<number | null>(null)
-  const [selectedEffectId, setSelectedEffectId] = useState('simplefilter')
-  const [effectParams, setEffectParams] = useState<Record<string, number>>(() => getEffectDefaults('simplefilter'))
-  const [effectEnabled, setEffectEnabled] = useState(false)
+  const [bankEffects, setBankEffects] = useState<Record<BankId, EffectChainState>>(() => createInitialBankEffects())
+  const [masterEffect, setMasterEffect] = useState<EffectChainState>(() => createInitialEffectChain())
   const [midiAccessState, setMidiAccessState] = useState<'idle' | 'connecting' | 'ready' | 'error'>('idle')
   const [midiStatusMessage, setMidiStatusMessage] = useState('Enable MIDI to map controller notes to the pad grid.')
   const [availableMidiInputs, setAvailableMidiInputs] = useState<Array<{ id: string; name: string }>>([])
@@ -104,10 +106,14 @@ function App() {
   const [isMidiPanelOpen, setIsMidiPanelOpen] = useState(false)
 
   const audioContextRef = useRef<AudioContext | null>(null)
-  const effectInputRef = useRef<GainNode | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
   const bankGainNodesRef = useRef<Partial<Record<BankId, GainNode>>>({})
-  const effectCleanupRef = useRef<(() => void) | null>(null)
+  const bankEffectInputsRef = useRef<Partial<Record<BankId, GainNode>>>({})
+  const bankEffectOutputsRef = useRef<Partial<Record<BankId, GainNode>>>({})
+  const masterEffectInputRef = useRef<GainNode | null>(null)
+  const effectCleanupsRef = useRef<Partial<Record<EffectChainSlotId, () => void>>>({})
+  const effectRuntimesRef = useRef<Partial<Record<EffectChainSlotId, ActiveEffectRuntime | null>>>({})
+  const previousEffectParamsRef = useRef<Partial<Record<EffectChainSlotId, Record<string, number>>>>({})
   const bufferMapRef = useRef<Map<string, AudioBuffer>>(new Map())
   const reversedBufferMapRef = useRef<Map<string, AudioBuffer>>(new Map())
   const loadPromiseRef = useRef<Promise<void> | null>(null)
@@ -120,13 +126,13 @@ function App() {
   const arpStepIndexRef = useRef(0)
   const arpDirectionRef = useRef<1 | -1>(1)
   const arpActiveNoteIdRef = useRef<string | null>(null)
-  const activeEffectRuntimeRef = useRef<ActiveEffectRuntime | null>(null)
   const activeLoopPlaybackRef = useRef<ActiveLoopPlayback | null>(null)
   const loopPlaybackIdRef = useRef(0)
   const playheadFrameRef = useRef<number | null>(null)
   const activePadPlayheadIdRef = useRef<string | null>(null)
   const preservedLoopChopRegionsRef = useRef<ChopRegion[] | null>(null)
   const preservedSelectedChopIdRef = useRef<string | null>(null)
+  const micTakeAudioRef = useRef<HTMLAudioElement | null>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const micStreamRef = useRef<MediaStream | null>(null)
   const recordedChunksRef = useRef<Blob[]>([])
@@ -142,7 +148,6 @@ function App() {
   const bankStatesRef = useRef(bankStates)
   const currentBankIdRef = useRef(currentBankId)
   const sequenceTempoRef = useRef(sequenceTempo)
-  const previousEffectParamsRef = useRef(effectParams)
   const midiAccessRef = useRef<MIDIAccess | null>(null)
   const selectedMidiInputIdRef = useRef<string | null>(selectedMidiInputId)
   const midiLearnPadIdRef = useRef<string | null>(midiLearnPadId)
@@ -179,8 +184,6 @@ function App() {
   const activeChromaticNoteSet = useMemo(() => new Set(activeChromaticNoteIds), [activeChromaticNoteIds])
   const chromaticRangeLabel = `${getChromaticNoteLabel(chromaticOctave, 0)}-${getChromaticNoteLabel(chromaticOctave, 12)}`
   const effectsList = useMemo(() => getEffectsList(), [])
-  const currentEffectConfig = getEffectConfig(selectedEffectId)
-  const isCurrentEffectSupported = supportedGlobalEffectIds.has(selectedEffectId)
   const micRecordingSupported = typeof MediaRecorder !== 'undefined' && typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
   const midiSupported = typeof navigator !== 'undefined' && typeof (navigator as NavigatorWithMidi).requestMIDIAccess === 'function'
   const isMidiEnabled = midiAccessState === 'ready'
@@ -217,6 +220,29 @@ function App() {
       recordingTimerRef.current = null
     }
   }
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light')
+  }, [isDarkMode])
+
+  useEffect(() => {
+    const blurSelect = (e: Event) => {
+      if (e.target instanceof HTMLSelectElement) {
+        requestAnimationFrame(() => (e.target as HTMLElement).blur())
+      }
+    }
+    const blurButton = (e: Event) => {
+      if (e.target instanceof HTMLButtonElement) {
+        requestAnimationFrame(() => (e.target as HTMLElement).blur())
+      }
+    }
+    document.addEventListener('change', blurSelect)
+    document.addEventListener('mouseup', blurButton)
+    return () => {
+      document.removeEventListener('change', blurSelect)
+      document.removeEventListener('mouseup', blurButton)
+    }
+  }, [])
 
   useEffect(() => {
     bankStatesRef.current = bankStates
@@ -341,9 +367,8 @@ function App() {
 
   useEffect(() => {
     return () => {
-      if (effectCleanupRef.current) {
-        effectCleanupRef.current()
-        effectCleanupRef.current = null
+      for (const slotId of effectChainSlotIds) {
+        effectCleanupsRef.current[slotId]?.()
       }
 
       if (sequenceSchedulerRef.current) {
@@ -618,430 +643,459 @@ function App() {
     }
   }
 
-  const applyGlobalEffectRouting = () => {
+  const applyEffectRouting = (slotId: EffectChainSlotId) => {
     const context = audioContextRef.current
-    const effectInput = effectInputRef.current
-    const masterGain = masterGainRef.current
+    if (!context) return
 
-    if (!context || !effectInput || !masterGain) {
-      return
+    let effectInput: GainNode | null
+    let output: GainNode | null
+    let chainState: EffectChainState
+
+    if (slotId === 'master') {
+      effectInput = masterEffectInputRef.current
+      output = masterGainRef.current
+      chainState = masterEffect
+    } else {
+      effectInput = bankEffectInputsRef.current[slotId] ?? null
+      output = bankEffectOutputsRef.current[slotId] ?? null
+      chainState = bankEffects[slotId]
     }
 
-    if (effectCleanupRef.current) {
-      effectCleanupRef.current()
-      effectCleanupRef.current = null
-    }
+    if (!effectInput || !output) return
 
-    activeEffectRuntimeRef.current = null
+    effectCleanupsRef.current[slotId]?.()
+    effectCleanupsRef.current[slotId] = undefined
+    effectRuntimesRef.current[slotId] = null
 
     try {
       const routing = createGlobalEffectRouting({
         context,
         effectInput,
-        masterGain,
-        effectId: selectedEffectId,
-        effectEnabled,
-        isEffectSupported: isCurrentEffectSupported,
-        effectParams,
+        masterGain: output,
+        effectId: chainState.effectId,
+        effectEnabled: chainState.enabled,
+        isEffectSupported: supportedGlobalEffectIds.has(chainState.effectId),
+        effectParams: chainState.params,
       })
-
-      effectCleanupRef.current = routing.cleanup
-      activeEffectRuntimeRef.current = routing.runtime
+      effectCleanupsRef.current[slotId] = routing.cleanup
+      effectRuntimesRef.current[slotId] = routing.runtime
     } catch (error) {
-      console.error('Failed to rebuild effect chain.', error)
+      console.error(`Failed to rebuild effect chain for ${slotId}.`, error)
+      try { effectInput.disconnect() } catch {}
+      effectInput.connect(output)
+    }
+  }
 
-      try {
-        effectInput.disconnect()
-      } catch {}
-
-      effectInput.connect(masterGain)
-      effectCleanupRef.current = () => {
-        try {
-          effectInput.disconnect()
-        } catch {}
-      }
-      activeEffectRuntimeRef.current = null
+  const applyAllEffectRouting = () => {
+    for (const slotId of effectChainSlotIds) {
+      applyEffectRouting(slotId)
     }
   }
 
   useEffect(() => {
-    applyGlobalEffectRouting()
-  }, [selectedEffectId, effectEnabled, isCurrentEffectSupported])
+    applyAllEffectRouting()
+  }, [
+    bankEffects.A.effectId, bankEffects.A.enabled,
+    bankEffects.B.effectId, bankEffects.B.enabled,
+    bankEffects.C.effectId, bankEffects.C.enabled,
+    bankEffects.D.effectId, bankEffects.D.enabled,
+    masterEffect.effectId, masterEffect.enabled,
+  ])
 
   useEffect(() => {
-    const previousParams = previousEffectParamsRef.current
-    previousEffectParamsRef.current = effectParams
+    const allSlots: Array<{ slotId: EffectChainSlotId; state: EffectChainState }> = [
+      ...bankIds.map((bankId) => ({ slotId: bankId as EffectChainSlotId, state: bankEffects[bankId] })),
+      { slotId: 'master' as EffectChainSlotId, state: masterEffect },
+    ]
 
-    const context = audioContextRef.current
-    const runtime = activeEffectRuntimeRef.current
+    for (const { slotId, state } of allSlots) {
+      const runtime = effectRuntimesRef.current[slotId]
+      const prev = previousEffectParamsRef.current[slotId] ?? {}
+      previousEffectParamsRef.current[slotId] = state.params
 
-    if (!context || !runtime || !effectEnabled || !isCurrentEffectSupported || runtime.effectId !== selectedEffectId) {
-      return
+      if (!runtime || !state.enabled || runtime.effectId !== state.effectId) continue
+
+      const context = audioContextRef.current
+      if (!context) continue
+
+      const refs = runtime.refs
+      const didChange = (key: string, fallback = 0) => (prev[key] ?? fallback) !== (state.params[key] ?? fallback)
+
+      if (didChange('wet', 0.5)) {
+        updateWetDryMix(refs, clamp(state.params.wet ?? 0.5, 0, 1))
+      }
+
+      if (state.effectId === 'simplefilter') {
+        const filter = refs.filter as BiquadFilterNode | undefined
+        if (!filter) {
+          continue
+        }
+
+        if (didChange('filterType', 0)) {
+          filter.type = ['lowpass', 'highpass', 'bandpass'][Math.max(0, Math.min(2, Math.round(state.params.filterType ?? 0)))] as BiquadFilterType
+        }
+        if (didChange('cutoffFreq', 2000)) {
+          smoothEffectParam(filter.frequency, clamp(state.params.cutoffFreq ?? 2000, 20, 20000), 0.03)
+        }
+        if (didChange('resonance', 5)) {
+          smoothEffectParam(filter.Q, clamp(state.params.resonance ?? 5, 0.0001, 30), 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'autofilter') {
+        const filter = refs.filter as BiquadFilterNode | undefined
+        const lfo = refs.lfo as OscillatorNode | undefined
+        const lfoGain = refs.lfoGain as GainNode | undefined
+        if (!filter || !lfo || !lfoGain) {
+          continue
+        }
+
+        if (didChange('rate', 5)) {
+          smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 5, 0.1, 10), 0.02)
+        }
+        if (didChange('baseFreq', 990) || didChange('depth', 0.8) || didChange('octaves', 1)) {
+          const baseFreq = clamp(state.params.baseFreq ?? 990, 20, 12000)
+          const depth = clamp(state.params.depth ?? 0.8, 0, 1)
+          const octaves = clamp(state.params.octaves ?? 1, 1, 6)
+          smoothEffectParam(filter.frequency, baseFreq, 0.03)
+          smoothEffectParam(lfoGain.gain, baseFreq * (Math.pow(2, octaves) - 1) * depth, 0.03, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'autopanner') {
+        const lfo = refs.lfo as OscillatorNode | undefined
+        const lfoGain = refs.lfoGain as GainNode | undefined
+        if (!lfo || !lfoGain) {
+          continue
+        }
+
+        if (didChange('type', 0)) {
+          lfo.type = getLfoWaveform(state.params.type ?? 0)
+        }
+        if (didChange('rate', 2)) {
+          smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 2, 0.1, 10), 0.02)
+        }
+        if (didChange('depth', 0.8)) {
+          smoothEffectParam(lfoGain.gain, clamp(state.params.depth ?? 0.8, 0, 1), 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'delay') {
+        const delay = refs.delay as DelayNode | undefined
+        const feedbackGain = refs.feedbackGain as GainNode | undefined
+        if (delay && didChange('delayTime', 0.2)) {
+          smoothEffectParam(delay.delayTime, clamp(state.params.delayTime ?? 0.2, 0.01, 2), 0.05, 'linear')
+        }
+        if (feedbackGain && didChange('feedback', 0.5)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.5, 0, 0.95), 0.015, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'taptempodelay') {
+        const delay = refs.delay as DelayNode | undefined
+        const feedbackGain = refs.feedbackGain as GainNode | undefined
+        if (delay && (didChange('tapTempo', 120) || didChange('subdivision', 1))) {
+          smoothEffectParam(delay.delayTime, clamp(getSubdivisionSeconds(state.params.tapTempo ?? 120, state.params.subdivision ?? 1), 0.01, 2), 0.05, 'linear')
+        }
+        if (feedbackGain && didChange('feedback', 0.4)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.4, 0, 0.95), 0.015, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'distortion') {
+        const shaper = refs.shaper as WaveShaperNode | undefined
+        const toneFilter = refs.toneFilter as BiquadFilterNode | undefined
+        if (shaper && didChange('amount', 0.5)) {
+          shaper.curve = buildDistortionCurve(clamp(state.params.amount ?? 0.5, 0, 1))
+        }
+        if (toneFilter && didChange('tone', 0.5)) {
+          smoothEffectParam(toneFilter.frequency, 700 + clamp(state.params.tone ?? 0.5, 0, 1) * 7300, 0.025)
+        }
+        continue
+      }
+
+      if (state.effectId === 'bitcrusher') {
+        const crusher = refs.crusher as BitcrusherProcessorNode | undefined
+        if (crusher?._updateSettings && (didChange('bits', 8) || didChange('normalRange', 0.4))) {
+          crusher._updateSettings(state.params.bits ?? 8, state.params.normalRange ?? 0.4)
+        }
+        continue
+      }
+
+      if (state.effectId === 'reverb') {
+        const convolver = refs.convolver as ConvolverNode | undefined
+        if (convolver && (didChange('roomSize', 0.7) || didChange('decay', 2))) {
+          convolver.buffer = buildImpulseResponse(context, clamp(state.params.roomSize ?? 0.7, 0, 1), clamp(state.params.decay ?? 2, 0.2, 10))
+        }
+        continue
+      }
+
+      if (state.effectId === 'hallreverb') {
+        const preDelay = refs.preDelay as DelayNode | undefined
+        const convolver = refs.convolver as ConvolverNode | undefined
+        const damping = refs.damping as BiquadFilterNode | undefined
+        if (preDelay && didChange('preDelay', 0.03)) {
+          smoothEffectParam(preDelay.delayTime, clamp(state.params.preDelay ?? 0.03, 0, 1), 0.03, 'linear')
+        }
+        if (convolver && (didChange('roomSize', 0.8) || didChange('decay', 4))) {
+          convolver.buffer = buildImpulseResponse(context, clamp(state.params.roomSize ?? 0.8, 0, 1), clamp(state.params.decay ?? 4, 0.2, 10))
+        }
+        if (damping && didChange('damping', 6000)) {
+          smoothEffectParam(damping.frequency, clamp(state.params.damping ?? 6000, 500, 12000), 0.03)
+        }
+        continue
+      }
+
+      if (state.effectId === 'compressor') {
+        const compressor = refs.compressor as DynamicsCompressorNode | undefined
+        if (!compressor) {
+          continue
+        }
+
+        if (didChange('threshold', -24)) {
+          smoothEffectParam(compressor.threshold, clamp(state.params.threshold ?? -24, -60, 0), 0.02, 'linear')
+        }
+        if (didChange('ratio', 4)) {
+          smoothEffectParam(compressor.ratio, clamp(state.params.ratio ?? 4, 1, 20), 0.02, 'linear')
+        }
+        if (didChange('attack', 0.003)) {
+          smoothEffectParam(compressor.attack, clamp(state.params.attack ?? 0.003, 0, 1), 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'djeq') {
+        const low = refs.low as BiquadFilterNode | undefined
+        const mid = refs.mid as BiquadFilterNode | undefined
+        const high = refs.high as BiquadFilterNode | undefined
+        if (low && didChange('lowGain', 0)) {
+          smoothEffectParam(low.gain, clamp(state.params.lowGain ?? 0, -15, 15), 0.02, 'linear')
+        }
+        if (mid && didChange('midGain', 0)) {
+          smoothEffectParam(mid.gain, clamp(state.params.midGain ?? 0, -15, 15), 0.02, 'linear')
+        }
+        if (high && didChange('highGain', 0)) {
+          smoothEffectParam(high.gain, clamp(state.params.highGain ?? 0, -15, 15), 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'chorus' || state.effectId === 'vibrato' || state.effectId === 'pitchshifter') {
+        const delay = refs.delay as DelayNode | undefined
+        const lfo = refs.lfo as OscillatorNode | undefined
+        const lfoGain = refs.lfoGain as GainNode | undefined
+        if (!delay || !lfo || !lfoGain) {
+          continue
+        }
+
+        if (didChange('type', 0)) {
+          lfo.type = getLfoWaveform(state.params.type ?? 0)
+        }
+        if (didChange('rate', 1.2)) {
+          smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 1.2, 0.1, 20), 0.02)
+        }
+        if (
+          didChange('delay', 5) ||
+          didChange('depth', 0.4) ||
+          didChange('pitch', 0)
+        ) {
+          const baseDelay = state.effectId === 'pitchshifter'
+            ? 0.02 + clamp(Math.abs(state.params.pitch ?? 0), 0, 12) * 0.0012
+            : state.effectId === 'vibrato'
+              ? 0.008
+              : clamp((state.params.delay ?? 5) / 1000, 0.002, 0.03)
+          const depth = state.effectId === 'pitchshifter'
+            ? 0.001 + clamp(Math.abs(state.params.pitch ?? 0), 0, 12) * 0.0005
+            : clamp(state.params.depth ?? 0.4, 0, 1) * 0.004
+          smoothEffectParam(delay.delayTime, baseDelay, 0.03, 'linear')
+          smoothEffectParam(lfoGain.gain, depth, 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'flanger') {
+        const lfo = refs.lfo as OscillatorNode | undefined
+        const lfoGain = refs.lfoGain as GainNode | undefined
+        const feedbackGain = refs.feedbackGain as GainNode | undefined
+        if (lfo && didChange('rate', 0.5)) {
+          smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 0.5, 0.1, 5), 0.02)
+        }
+        if (lfoGain && didChange('depth', 50)) {
+          smoothEffectParam(lfoGain.gain, clamp((state.params.depth ?? 50) / 100, 0, 1) * 0.0045, 0.02, 'linear')
+        }
+        if (feedbackGain && didChange('feedback', 0.3)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.3, 0, 0.95), 0.015, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'phaser') {
+        const lfo = refs.lfo as OscillatorNode | undefined
+        const lfoGain = refs.lfoGain as GainNode | undefined
+        const feedbackGain = refs.feedbackGain as GainNode | undefined
+        if (lfo && didChange('rate', 1)) {
+          smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 1, 0.1, 5), 0.02)
+        }
+        if (lfoGain && didChange('depth', 0.4)) {
+          smoothEffectParam(lfoGain.gain, 1200 * clamp(state.params.depth ?? 0.4, 0, 1), 0.02, 'linear')
+        }
+        if (feedbackGain && didChange('feedback', 0.7)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.7, 0, 0.9), 0.015, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'combfilter') {
+        const delay = refs.delay as DelayNode | undefined
+        const feedbackGain = refs.feedbackGain as GainNode | undefined
+        const feedforwardGain = refs.feedforwardGain as GainNode | undefined
+        if (delay && didChange('delayTime', 0.01)) {
+          smoothEffectParam(delay.delayTime, clamp(state.params.delayTime ?? 0.01, 0.001, 0.05), 0.03, 'linear')
+        }
+        if (feedbackGain && didChange('feedback', 0.95)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.95, 0, 0.98), 0.015, 'linear')
+        }
+        if (feedforwardGain && didChange('feedforward', 0.5)) {
+          smoothEffectParam(feedforwardGain.gain, clamp(state.params.feedforward ?? 0.5, 0, 1), 0.015, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'ringmodulator') {
+        const carrier = refs.carrier as OscillatorNode | undefined
+        const carrierGain = refs.carrierGain as GainNode | undefined
+        if (carrier && didChange('waveform', 0)) {
+          carrier.type = getLfoWaveform(state.params.waveform ?? 0)
+        }
+        if (carrier && didChange('carrierFreq', 200)) {
+          smoothEffectParam(carrier.frequency, clamp(state.params.carrierFreq ?? 200, 10, 2000), 0.02)
+        }
+        if (carrierGain && didChange('mix', 50)) {
+          smoothEffectParam(carrierGain.gain, clamp((state.params.mix ?? 50) / 100, 0, 1), 0.015, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'tremolo' || state.effectId === 'sidechainpump' || state.effectId === 'loopchop') {
+        const lfo = refs.lfo as OscillatorNode | undefined
+        const lfoGain = refs.lfoGain as GainNode | undefined
+        const offset = refs.offset as ConstantSourceNode | undefined
+        if (!lfo || !lfoGain || !offset) {
+          continue
+        }
+
+        const depth = state.effectId === 'loopchop'
+          ? clamp(state.params.wet ?? 0.8, 0, 1)
+          : clamp(state.params.depth ?? 0.8, 0, 1)
+        const rate = state.effectId === 'tremolo'
+          ? clamp(state.params.rate ?? 6, 0.1, 20)
+          : state.effectId === 'sidechainpump'
+            ? clamp(0.75 + (state.params.sensitivity ?? 0.1) * 12, 0.5, 8)
+            : getLoopChopRate(state.params.loopSize ?? 2, state.params.stutterRate ?? 4)
+
+        if (
+          didChange('rate', 6) ||
+          didChange('sensitivity', 0.1) ||
+          didChange('loopSize', 2) ||
+          didChange('stutterRate', 4)
+        ) {
+          smoothEffectParam(lfo.frequency, rate, 0.02)
+        }
+        if (state.effectId === 'loopchop' ? didChange('wet', 0.8) : didChange('depth', 0.8)) {
+          smoothEffectParam(lfoGain.gain, depth / 2, 0.02, 'linear')
+          smoothEffectParam(offset.offset, 1 - depth / 2, 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'tapestop') {
+        const delay = refs.delay as DelayNode | undefined
+        const lowpass = refs.lowpass as BiquadFilterNode | undefined
+        const lfo = refs.lfo as OscillatorNode | undefined
+        if (delay && didChange('stopTime', 1)) {
+          smoothEffectParam(delay.delayTime, 0.02 + clamp(state.params.stopTime ?? 1, 0.1, 3) * 0.015, 0.04, 'linear')
+        }
+        if (lowpass && didChange('restartTime', 0.5)) {
+          smoothEffectParam(lowpass.frequency, 1800 + clamp(state.params.restartTime ?? 0.5, 0.1, 3) * 1800, 0.04)
+        }
+        if (lfo && didChange('mode', 2)) {
+          const modeRate = [0.12, 0.2, 0.35][Math.max(0, Math.min(2, Math.round(state.params.mode ?? 2)))] ?? 0.35
+          smoothEffectParam(lfo.frequency, modeRate, 0.04)
+        }
+        continue
+      }
+
+      if (state.effectId === 'lofitape') {
+        const shaper = refs.shaper as WaveShaperNode | undefined
+        const tone = refs.tone as BiquadFilterNode | undefined
+        const lfo = refs.lfo as OscillatorNode | undefined
+        const lfoGain = refs.lfoGain as GainNode | undefined
+        const noiseGain = refs.noiseGain as GainNode | undefined
+        if (shaper && didChange('saturation', 0.4)) {
+          shaper.curve = buildDistortionCurve(clamp(state.params.saturation ?? 0.4, 0, 1))
+        }
+        if (tone && didChange('toneRolloff', 6000)) {
+          smoothEffectParam(tone.frequency, clamp(state.params.toneRolloff ?? 6000, 500, 12000), 0.03)
+        }
+        if (lfo && didChange('flutterRate', 6)) {
+          smoothEffectParam(lfo.frequency, clamp(state.params.flutterRate ?? 6, 0.1, 20), 0.02)
+        }
+        if (lfoGain && didChange('wowDepth', 0.3)) {
+          smoothEffectParam(lfoGain.gain, clamp(state.params.wowDepth ?? 0.3, 0, 1) * 0.008, 0.02, 'linear')
+        }
+        if (noiseGain && didChange('noise', 0.1)) {
+          smoothEffectParam(noiseGain.gain, clamp(state.params.noise ?? 0.1, 0, 1) * 0.05, 0.02, 'linear')
+        }
+      }
     }
-
-    const refs = runtime.refs
-    const didChange = (key: string, fallback = 0) => (previousParams[key] ?? fallback) !== (effectParams[key] ?? fallback)
-
-    if (didChange('wet', 0.5)) {
-      updateWetDryMix(refs, clamp(effectParams.wet ?? 0.5, 0, 1))
-    }
-
-    if (selectedEffectId === 'simplefilter') {
-      const filter = refs.filter as BiquadFilterNode | undefined
-      if (!filter) {
-        return
-      }
-
-      if (didChange('filterType', 0)) {
-        filter.type = ['lowpass', 'highpass', 'bandpass'][Math.max(0, Math.min(2, Math.round(effectParams.filterType ?? 0)))] as BiquadFilterType
-      }
-      if (didChange('cutoffFreq', 2000)) {
-        smoothEffectParam(filter.frequency, clamp(effectParams.cutoffFreq ?? 2000, 20, 20000), 0.03)
-      }
-      if (didChange('resonance', 5)) {
-        smoothEffectParam(filter.Q, clamp(effectParams.resonance ?? 5, 0.0001, 30), 0.02, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'autofilter') {
-      const filter = refs.filter as BiquadFilterNode | undefined
-      const lfo = refs.lfo as OscillatorNode | undefined
-      const lfoGain = refs.lfoGain as GainNode | undefined
-      if (!filter || !lfo || !lfoGain) {
-        return
-      }
-
-      if (didChange('rate', 5)) {
-        smoothEffectParam(lfo.frequency, clamp(effectParams.rate ?? 5, 0.1, 10), 0.02)
-      }
-      if (didChange('baseFreq', 990) || didChange('depth', 0.8) || didChange('octaves', 1)) {
-        const baseFreq = clamp(effectParams.baseFreq ?? 990, 20, 12000)
-        const depth = clamp(effectParams.depth ?? 0.8, 0, 1)
-        const octaves = clamp(effectParams.octaves ?? 1, 1, 6)
-        smoothEffectParam(filter.frequency, baseFreq, 0.03)
-        smoothEffectParam(lfoGain.gain, baseFreq * (Math.pow(2, octaves) - 1) * depth, 0.03, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'autopanner') {
-      const lfo = refs.lfo as OscillatorNode | undefined
-      const lfoGain = refs.lfoGain as GainNode | undefined
-      if (!lfo || !lfoGain) {
-        return
-      }
-
-      if (didChange('type', 0)) {
-        lfo.type = getLfoWaveform(effectParams.type ?? 0)
-      }
-      if (didChange('rate', 2)) {
-        smoothEffectParam(lfo.frequency, clamp(effectParams.rate ?? 2, 0.1, 10), 0.02)
-      }
-      if (didChange('depth', 0.8)) {
-        smoothEffectParam(lfoGain.gain, clamp(effectParams.depth ?? 0.8, 0, 1), 0.02, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'delay') {
-      const delay = refs.delay as DelayNode | undefined
-      const feedbackGain = refs.feedbackGain as GainNode | undefined
-      if (delay && didChange('delayTime', 0.2)) {
-        smoothEffectParam(delay.delayTime, clamp(effectParams.delayTime ?? 0.2, 0.01, 2), 0.05, 'linear')
-      }
-      if (feedbackGain && didChange('feedback', 0.5)) {
-        smoothEffectParam(feedbackGain.gain, clamp(effectParams.feedback ?? 0.5, 0, 0.95), 0.015, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'taptempodelay') {
-      const delay = refs.delay as DelayNode | undefined
-      const feedbackGain = refs.feedbackGain as GainNode | undefined
-      if (delay && (didChange('tapTempo', 120) || didChange('subdivision', 1))) {
-        smoothEffectParam(delay.delayTime, clamp(getSubdivisionSeconds(effectParams.tapTempo ?? 120, effectParams.subdivision ?? 1), 0.01, 2), 0.05, 'linear')
-      }
-      if (feedbackGain && didChange('feedback', 0.4)) {
-        smoothEffectParam(feedbackGain.gain, clamp(effectParams.feedback ?? 0.4, 0, 0.95), 0.015, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'distortion') {
-      const shaper = refs.shaper as WaveShaperNode | undefined
-      const toneFilter = refs.toneFilter as BiquadFilterNode | undefined
-      if (shaper && didChange('amount', 0.5)) {
-        shaper.curve = buildDistortionCurve(clamp(effectParams.amount ?? 0.5, 0, 1))
-      }
-      if (toneFilter && didChange('tone', 0.5)) {
-        smoothEffectParam(toneFilter.frequency, 700 + clamp(effectParams.tone ?? 0.5, 0, 1) * 7300, 0.025)
-      }
-      return
-    }
-
-    if (selectedEffectId === 'bitcrusher') {
-      const crusher = refs.crusher as BitcrusherProcessorNode | undefined
-      if (crusher?._updateSettings && (didChange('bits', 8) || didChange('normalRange', 0.4))) {
-        crusher._updateSettings(effectParams.bits ?? 8, effectParams.normalRange ?? 0.4)
-      }
-      return
-    }
-
-    if (selectedEffectId === 'reverb') {
-      const convolver = refs.convolver as ConvolverNode | undefined
-      if (convolver && (didChange('roomSize', 0.7) || didChange('decay', 2))) {
-        convolver.buffer = buildImpulseResponse(context, clamp(effectParams.roomSize ?? 0.7, 0, 1), clamp(effectParams.decay ?? 2, 0.2, 10))
-      }
-      return
-    }
-
-    if (selectedEffectId === 'hallreverb') {
-      const preDelay = refs.preDelay as DelayNode | undefined
-      const convolver = refs.convolver as ConvolverNode | undefined
-      const damping = refs.damping as BiquadFilterNode | undefined
-      if (preDelay && didChange('preDelay', 0.03)) {
-        smoothEffectParam(preDelay.delayTime, clamp(effectParams.preDelay ?? 0.03, 0, 1), 0.03, 'linear')
-      }
-      if (convolver && (didChange('roomSize', 0.8) || didChange('decay', 4))) {
-        convolver.buffer = buildImpulseResponse(context, clamp(effectParams.roomSize ?? 0.8, 0, 1), clamp(effectParams.decay ?? 4, 0.2, 10))
-      }
-      if (damping && didChange('damping', 6000)) {
-        smoothEffectParam(damping.frequency, clamp(effectParams.damping ?? 6000, 500, 12000), 0.03)
-      }
-      return
-    }
-
-    if (selectedEffectId === 'compressor') {
-      const compressor = refs.compressor as DynamicsCompressorNode | undefined
-      if (!compressor) {
-        return
-      }
-
-      if (didChange('threshold', -24)) {
-        smoothEffectParam(compressor.threshold, clamp(effectParams.threshold ?? -24, -60, 0), 0.02, 'linear')
-      }
-      if (didChange('ratio', 4)) {
-        smoothEffectParam(compressor.ratio, clamp(effectParams.ratio ?? 4, 1, 20), 0.02, 'linear')
-      }
-      if (didChange('attack', 0.003)) {
-        smoothEffectParam(compressor.attack, clamp(effectParams.attack ?? 0.003, 0, 1), 0.02, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'djeq') {
-      const low = refs.low as BiquadFilterNode | undefined
-      const mid = refs.mid as BiquadFilterNode | undefined
-      const high = refs.high as BiquadFilterNode | undefined
-      if (low && didChange('lowGain', 0)) {
-        smoothEffectParam(low.gain, clamp(effectParams.lowGain ?? 0, -15, 15), 0.02, 'linear')
-      }
-      if (mid && didChange('midGain', 0)) {
-        smoothEffectParam(mid.gain, clamp(effectParams.midGain ?? 0, -15, 15), 0.02, 'linear')
-      }
-      if (high && didChange('highGain', 0)) {
-        smoothEffectParam(high.gain, clamp(effectParams.highGain ?? 0, -15, 15), 0.02, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'chorus' || selectedEffectId === 'vibrato' || selectedEffectId === 'pitchshifter') {
-      const delay = refs.delay as DelayNode | undefined
-      const lfo = refs.lfo as OscillatorNode | undefined
-      const lfoGain = refs.lfoGain as GainNode | undefined
-      if (!delay || !lfo || !lfoGain) {
-        return
-      }
-
-      if (didChange('type', 0)) {
-        lfo.type = getLfoWaveform(effectParams.type ?? 0)
-      }
-      if (didChange('rate', 1.2)) {
-        smoothEffectParam(lfo.frequency, clamp(effectParams.rate ?? 1.2, 0.1, 20), 0.02)
-      }
-      if (
-        didChange('delay', 5) ||
-        didChange('depth', 0.4) ||
-        didChange('pitch', 0)
-      ) {
-        const baseDelay = selectedEffectId === 'pitchshifter'
-          ? 0.02 + clamp(Math.abs(effectParams.pitch ?? 0), 0, 12) * 0.0012
-          : selectedEffectId === 'vibrato'
-            ? 0.008
-            : clamp((effectParams.delay ?? 5) / 1000, 0.002, 0.03)
-        const depth = selectedEffectId === 'pitchshifter'
-          ? 0.001 + clamp(Math.abs(effectParams.pitch ?? 0), 0, 12) * 0.0005
-          : clamp(effectParams.depth ?? 0.4, 0, 1) * 0.004
-        smoothEffectParam(delay.delayTime, baseDelay, 0.03, 'linear')
-        smoothEffectParam(lfoGain.gain, depth, 0.02, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'flanger') {
-      const lfo = refs.lfo as OscillatorNode | undefined
-      const lfoGain = refs.lfoGain as GainNode | undefined
-      const feedbackGain = refs.feedbackGain as GainNode | undefined
-      if (lfo && didChange('rate', 0.5)) {
-        smoothEffectParam(lfo.frequency, clamp(effectParams.rate ?? 0.5, 0.1, 5), 0.02)
-      }
-      if (lfoGain && didChange('depth', 50)) {
-        smoothEffectParam(lfoGain.gain, clamp((effectParams.depth ?? 50) / 100, 0, 1) * 0.0045, 0.02, 'linear')
-      }
-      if (feedbackGain && didChange('feedback', 0.3)) {
-        smoothEffectParam(feedbackGain.gain, clamp(effectParams.feedback ?? 0.3, 0, 0.95), 0.015, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'phaser') {
-      const lfo = refs.lfo as OscillatorNode | undefined
-      const lfoGain = refs.lfoGain as GainNode | undefined
-      const feedbackGain = refs.feedbackGain as GainNode | undefined
-      if (lfo && didChange('rate', 1)) {
-        smoothEffectParam(lfo.frequency, clamp(effectParams.rate ?? 1, 0.1, 5), 0.02)
-      }
-      if (lfoGain && didChange('depth', 0.4)) {
-        smoothEffectParam(lfoGain.gain, 1200 * clamp(effectParams.depth ?? 0.4, 0, 1), 0.02, 'linear')
-      }
-      if (feedbackGain && didChange('feedback', 0.7)) {
-        smoothEffectParam(feedbackGain.gain, clamp(effectParams.feedback ?? 0.7, 0, 0.9), 0.015, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'combfilter') {
-      const delay = refs.delay as DelayNode | undefined
-      const feedbackGain = refs.feedbackGain as GainNode | undefined
-      const feedforwardGain = refs.feedforwardGain as GainNode | undefined
-      if (delay && didChange('delayTime', 0.01)) {
-        smoothEffectParam(delay.delayTime, clamp(effectParams.delayTime ?? 0.01, 0.001, 0.05), 0.03, 'linear')
-      }
-      if (feedbackGain && didChange('feedback', 0.95)) {
-        smoothEffectParam(feedbackGain.gain, clamp(effectParams.feedback ?? 0.95, 0, 0.98), 0.015, 'linear')
-      }
-      if (feedforwardGain && didChange('feedforward', 0.5)) {
-        smoothEffectParam(feedforwardGain.gain, clamp(effectParams.feedforward ?? 0.5, 0, 1), 0.015, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'ringmodulator') {
-      const carrier = refs.carrier as OscillatorNode | undefined
-      const carrierGain = refs.carrierGain as GainNode | undefined
-      if (carrier && didChange('waveform', 0)) {
-        carrier.type = getLfoWaveform(effectParams.waveform ?? 0)
-      }
-      if (carrier && didChange('carrierFreq', 200)) {
-        smoothEffectParam(carrier.frequency, clamp(effectParams.carrierFreq ?? 200, 10, 2000), 0.02)
-      }
-      if (carrierGain && didChange('mix', 50)) {
-        smoothEffectParam(carrierGain.gain, clamp((effectParams.mix ?? 50) / 100, 0, 1), 0.015, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'tremolo' || selectedEffectId === 'sidechainpump' || selectedEffectId === 'loopchop') {
-      const lfo = refs.lfo as OscillatorNode | undefined
-      const lfoGain = refs.lfoGain as GainNode | undefined
-      const offset = refs.offset as ConstantSourceNode | undefined
-      if (!lfo || !lfoGain || !offset) {
-        return
-      }
-
-      const depth = selectedEffectId === 'loopchop'
-        ? clamp(effectParams.wet ?? 0.8, 0, 1)
-        : clamp(effectParams.depth ?? 0.8, 0, 1)
-      const rate = selectedEffectId === 'tremolo'
-        ? clamp(effectParams.rate ?? 6, 0.1, 20)
-        : selectedEffectId === 'sidechainpump'
-          ? clamp(0.75 + (effectParams.sensitivity ?? 0.1) * 12, 0.5, 8)
-          : getLoopChopRate(effectParams.loopSize ?? 2, effectParams.stutterRate ?? 4)
-
-      if (
-        didChange('rate', 6) ||
-        didChange('sensitivity', 0.1) ||
-        didChange('loopSize', 2) ||
-        didChange('stutterRate', 4)
-      ) {
-        smoothEffectParam(lfo.frequency, rate, 0.02)
-      }
-      if (selectedEffectId === 'loopchop' ? didChange('wet', 0.8) : didChange('depth', 0.8)) {
-        smoothEffectParam(lfoGain.gain, depth / 2, 0.02, 'linear')
-        smoothEffectParam(offset.offset, 1 - depth / 2, 0.02, 'linear')
-      }
-      return
-    }
-
-    if (selectedEffectId === 'tapestop') {
-      const delay = refs.delay as DelayNode | undefined
-      const lowpass = refs.lowpass as BiquadFilterNode | undefined
-      const lfo = refs.lfo as OscillatorNode | undefined
-      if (delay && didChange('stopTime', 1)) {
-        smoothEffectParam(delay.delayTime, 0.02 + clamp(effectParams.stopTime ?? 1, 0.1, 3) * 0.015, 0.04, 'linear')
-      }
-      if (lowpass && didChange('restartTime', 0.5)) {
-        smoothEffectParam(lowpass.frequency, 1800 + clamp(effectParams.restartTime ?? 0.5, 0.1, 3) * 1800, 0.04)
-      }
-      if (lfo && didChange('mode', 2)) {
-        const modeRate = [0.12, 0.2, 0.35][Math.max(0, Math.min(2, Math.round(effectParams.mode ?? 2)))] ?? 0.35
-        smoothEffectParam(lfo.frequency, modeRate, 0.04)
-      }
-      return
-    }
-
-    if (selectedEffectId === 'lofitape') {
-      const shaper = refs.shaper as WaveShaperNode | undefined
-      const tone = refs.tone as BiquadFilterNode | undefined
-      const lfo = refs.lfo as OscillatorNode | undefined
-      const lfoGain = refs.lfoGain as GainNode | undefined
-      const noiseGain = refs.noiseGain as GainNode | undefined
-      if (shaper && didChange('saturation', 0.4)) {
-        shaper.curve = buildDistortionCurve(clamp(effectParams.saturation ?? 0.4, 0, 1))
-      }
-      if (tone && didChange('toneRolloff', 6000)) {
-        smoothEffectParam(tone.frequency, clamp(effectParams.toneRolloff ?? 6000, 500, 12000), 0.03)
-      }
-      if (lfo && didChange('flutterRate', 6)) {
-        smoothEffectParam(lfo.frequency, clamp(effectParams.flutterRate ?? 6, 0.1, 20), 0.02)
-      }
-      if (lfoGain && didChange('wowDepth', 0.3)) {
-        smoothEffectParam(lfoGain.gain, clamp(effectParams.wowDepth ?? 0.3, 0, 1) * 0.008, 0.02, 'linear')
-      }
-      if (noiseGain && didChange('noise', 0.1)) {
-        smoothEffectParam(noiseGain.gain, clamp(effectParams.noise ?? 0.1, 0, 1) * 0.05, 0.02, 'linear')
-      }
-    }
-  }, [effectParams, selectedEffectId, effectEnabled, isCurrentEffectSupported])
+  }, [bankEffects, masterEffect])
 
   const getAudioContext = () => {
     if (!audioContextRef.current) {
       const context = new window.AudioContext()
-      const effectInput = context.createGain()
       const masterGain = context.createGain()
       const outputLimiter = context.createDynamicsCompressor()
-      // Leave some headroom before the final limiter so quick pad stacks do not hard-clip the output.
-      effectInput.gain.value = 0.78
       masterGain.gain.value = masterOutputGain
       outputLimiter.threshold.value = -1.5
       outputLimiter.knee.value = 4
       outputLimiter.ratio.value = 20
       outputLimiter.attack.value = 0.003
       outputLimiter.release.value = 0.12
+
+      const masterEffectInput = context.createGain()
+      masterEffectInput.gain.value = 1.0
+
       for (const bankId of bankIds) {
         const bankGain = context.createGain()
         bankGain.gain.value = getEffectiveBankGain(bankId, bankMixerGains, bankMixerMuted, bankMixerSoloed)
-        bankGain.connect(effectInput)
+
+        const bankEffectInput = context.createGain()
+        bankEffectInput.gain.value = 0.78
+
+        const bankEffectOutput = context.createGain()
+        bankEffectOutput.gain.value = 1.0
+
+        bankGain.connect(bankEffectInput)
+        bankEffectInput.connect(bankEffectOutput)
+        bankEffectOutput.connect(masterEffectInput)
+
         bankGainNodesRef.current[bankId] = bankGain
+        bankEffectInputsRef.current[bankId] = bankEffectInput
+        bankEffectOutputsRef.current[bankId] = bankEffectOutput
       }
-      effectInput.connect(masterGain)
+
+      masterEffectInput.connect(masterGain)
       masterGain.connect(outputLimiter)
       outputLimiter.connect(context.destination)
+
       audioContextRef.current = context
-      effectInputRef.current = effectInput
+      masterEffectInputRef.current = masterEffectInput
       masterGainRef.current = masterGain
-      applyGlobalEffectRouting()
     }
 
     return audioContextRef.current
@@ -1312,65 +1366,106 @@ function App() {
 
     const firstLoadedBuffer = playbackBuffers.values().next().value as AudioBuffer | undefined
     const sampleRate = audioContextRef.current?.sampleRate ?? firstLoadedBuffer?.sampleRate ?? 44100
-    const effectTailPaddingSeconds = getEffectTailPaddingSeconds(selectedEffectId, effectParams, effectEnabled, isCurrentEffectSupported)
+    const bankTails = bankIds.map((bankId) => {
+      const chain = bankEffects[bankId]
+      return getEffectTailPaddingSeconds(chain.effectId, chain.params, chain.enabled, supportedGlobalEffectIds.has(chain.effectId))
+    })
+    const masterTail = getEffectTailPaddingSeconds(masterEffect.effectId, masterEffect.params, masterEffect.enabled, supportedGlobalEffectIds.has(masterEffect.effectId))
+    const effectTailPaddingSeconds = Math.max(...bankTails, 0) + masterTail
     const renderedDurationSeconds = Math.max(exportStepCount * stepDurationSeconds, latestSourceEnd) + effectTailPaddingSeconds
     const frameCount = Math.max(1, Math.ceil(renderedDurationSeconds * sampleRate) + Math.ceil(sampleRate * 0.02))
     const offlineContext = new OfflineAudioContext(2, frameCount, sampleRate)
-    const effectInput = offlineContext.createGain()
     const masterGain = offlineContext.createGain()
     const outputLimiter = offlineContext.createDynamicsCompressor()
 
-    effectInput.gain.value = 0.78
     masterGain.gain.value = masterOutputGain
     outputLimiter.threshold.value = -1.5
     outputLimiter.knee.value = 4
     outputLimiter.ratio.value = 20
     outputLimiter.attack.value = 0.003
     outputLimiter.release.value = 0.12
-    masterGain.connect(outputLimiter)
-    outputLimiter.connect(offlineContext.destination)
+
+    const offlineMasterEffectInput = offlineContext.createGain()
+    offlineMasterEffectInput.gain.value = 1.0
 
     const offlineBankGainNodes = {} as Partial<Record<BankId, GainNode>>
+    const offlineBankEffectInputs = {} as Partial<Record<BankId, GainNode>>
+    const offlineBankEffectOutputs = {} as Partial<Record<BankId, GainNode>>
 
     for (const { bankId, bankGain } of audibleBanks) {
       const bankGainNode = offlineContext.createGain()
       bankGainNode.gain.value = bankGain
-      bankGainNode.connect(effectInput)
+
+      const bankEffectInput = offlineContext.createGain()
+      bankEffectInput.gain.value = 0.78
+
+      const bankEffectOutput = offlineContext.createGain()
+      bankEffectOutput.gain.value = 1.0
+
+      bankGainNode.connect(bankEffectInput)
+      bankEffectInput.connect(bankEffectOutput)
+      bankEffectOutput.connect(offlineMasterEffectInput)
+
       offlineBankGainNodes[bankId] = bankGainNode
+      offlineBankEffectInputs[bankId] = bankEffectInput
+      offlineBankEffectOutputs[bankId] = bankEffectOutput
     }
 
-    let effectCleanup: (() => void) | null = null
-    let effectUsed = effectEnabled && isCurrentEffectSupported
+    offlineMasterEffectInput.connect(masterGain)
+    masterGain.connect(outputLimiter)
+    outputLimiter.connect(offlineContext.destination)
+
+    const effectCleanups: Array<() => void> = []
+    let effectUsed = false
     let effectFallback = false
 
     try {
+      // Apply per-bank effect chains
+      for (const { bankId } of audibleBanks) {
+        const bankChain = bankEffects[bankId]
+        const bankInput = offlineBankEffectInputs[bankId]!
+        const bankOutput = offlineBankEffectOutputs[bankId]!
+        const isBankEffectSupported = supportedGlobalEffectIds.has(bankChain.effectId)
+
+        try {
+          const routing = createGlobalEffectRouting({
+            context: offlineContext,
+            effectInput: bankInput,
+            masterGain: bankOutput,
+            effectId: bankChain.effectId,
+            effectEnabled: bankChain.enabled,
+            isEffectSupported: isBankEffectSupported,
+            effectParams: bankChain.params,
+          })
+          effectCleanups.push(routing.cleanup)
+          if (bankChain.enabled && isBankEffectSupported) effectUsed = true
+        } catch (error) {
+          console.error(`Offline bank ${bankId} effect render failed. Exporting that bank dry.`, error)
+          if (bankChain.enabled && isBankEffectSupported) effectFallback = true
+          try { bankInput.disconnect() } catch {}
+          bankInput.connect(bankOutput)
+        }
+      }
+
+      // Apply master effect chain
+      const isMasterEffectSupported = supportedGlobalEffectIds.has(masterEffect.effectId)
       try {
         const routing = createGlobalEffectRouting({
           context: offlineContext,
-          effectInput,
+          effectInput: offlineMasterEffectInput,
           masterGain,
-          effectId: selectedEffectId,
-          effectEnabled,
-          isEffectSupported: isCurrentEffectSupported,
-          effectParams,
+          effectId: masterEffect.effectId,
+          effectEnabled: masterEffect.enabled,
+          isEffectSupported: isMasterEffectSupported,
+          effectParams: masterEffect.params,
         })
-
-        effectCleanup = routing.cleanup
+        effectCleanups.push(routing.cleanup)
+        if (masterEffect.enabled && isMasterEffectSupported) effectUsed = true
       } catch (error) {
-        console.error('Offline effect render failed. Exporting the sequence dry instead.', error)
-        effectUsed = false
-        effectFallback = effectEnabled && isCurrentEffectSupported
-
-        try {
-          effectInput.disconnect()
-        } catch {}
-
-        effectInput.connect(masterGain)
-        effectCleanup = () => {
-          try {
-            effectInput.disconnect()
-          } catch {}
-        }
+        console.error('Offline master effect render failed. Exporting master dry.', error)
+        if (masterEffect.enabled && isMasterEffectSupported) effectFallback = true
+        try { offlineMasterEffectInput.disconnect() } catch {}
+        offlineMasterEffectInput.connect(masterGain)
       }
 
       for (const scheduledHit of scheduledHits) {
@@ -1412,7 +1507,62 @@ function App() {
         effectFallback,
       }
     } finally {
-      effectCleanup?.()
+      for (const cleanup of effectCleanups) {
+        cleanup()
+      }
+    }
+  }
+
+  const [isExportingKit, setIsExportingKit] = useState(false)
+
+  const exportKit = async () => {
+    if (isExportingKit) return
+
+    try {
+      setIsExportingKit(true)
+      await ensureAudioEngine()
+
+      const context = getAudioContext()
+      const zip = new JSZip()
+      const bankLabel = `Bank-${currentBankId}`
+
+      for (const pad of currentBankPads) {
+        try {
+          const response = await fetch(pad.sampleUrl)
+          if (!response.ok) continue
+
+          const arrayBuffer = await response.arrayBuffer()
+          const decoded = await context.decodeAudioData(arrayBuffer.slice(0))
+          const settings = currentBankState.playbackSettings[pad.id]
+          const startFraction = settings?.startFraction ?? 0
+          const endFraction = settings?.endFraction ?? 1
+
+          let exportBuffer = decoded
+          if (startFraction > 0 || endFraction < 1) {
+            const startSample = Math.floor(startFraction * decoded.length)
+            const endSample = Math.floor(endFraction * decoded.length)
+            const sliceLength = Math.max(1, endSample - startSample)
+            const sliced = context.createBuffer(decoded.numberOfChannels, sliceLength, decoded.sampleRate)
+            for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+              sliced.getChannelData(ch).set(decoded.getChannelData(ch).subarray(startSample, endSample))
+            }
+            exportBuffer = sliced
+          }
+
+          const wavBlob = encodeWavBlob(exportBuffer)
+          const fileName = `${pad.label.replace(/\s+/g, '-')}_${sanitizeDownloadName(pad.sampleName)}.wav`
+          zip.file(fileName, wavBlob)
+        } catch {
+          // skip pads that fail to decode
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' })
+      triggerBlobDownload(zipBlob, `${bankLabel}-Kit.zip`)
+    } catch {
+      // export failed silently
+    } finally {
+      setIsExportingKit(false)
     }
   }
 
@@ -1651,6 +1801,67 @@ function App() {
     recorder.stop()
   }
 
+  const toggleMicTakePreview = () => {
+    const audio = micTakeAudioRef.current
+    if (!audio) return
+    if (audio.paused) {
+      void audio.play()
+    } else {
+      audio.pause()
+      audio.currentTime = 0
+    }
+  }
+
+  const [isNormalizingTake, setIsNormalizingTake] = useState(false)
+
+  const normalizeRecordedTake = async () => {
+    if (!recordedTake || isNormalizingTake) return
+
+    try {
+      setIsNormalizingTake(true)
+      const context = getAudioContext()
+      const arrayBuffer = await recordedTake.blob.arrayBuffer()
+      const decoded = await context.decodeAudioData(arrayBuffer.slice(0))
+
+      let peak = 0
+      for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+        const data = decoded.getChannelData(ch)
+        for (let i = 0; i < data.length; i++) {
+          peak = Math.max(peak, Math.abs(data[i]))
+        }
+      }
+
+      if (peak <= 0.0001) {
+        setIsNormalizingTake(false)
+        return
+      }
+
+      const gain = 0.98 / peak
+      const normalized = context.createBuffer(decoded.numberOfChannels, decoded.length, decoded.sampleRate)
+      for (let ch = 0; ch < decoded.numberOfChannels; ch++) {
+        const src = decoded.getChannelData(ch)
+        const dst = normalized.getChannelData(ch)
+        for (let i = 0; i < src.length; i++) {
+          dst[i] = Math.max(-1, Math.min(1, src[i] * gain))
+        }
+      }
+
+      const blob = encodeWavBlob(normalized)
+      const previewUrl = createEphemeralAudioUrl(blob)
+
+      setRecordedTake({
+        ...recordedTake,
+        blob,
+        previewUrl,
+      })
+      setMicCaptureMessage('Normalized the recorded take.')
+    } catch {
+      setMicCaptureMessage('Failed to normalize the take.')
+    } finally {
+      setIsNormalizingTake(false)
+    }
+  }
+
   const clearRecordedTake = () => {
     if (micCaptureState === 'recording' || micCaptureState === 'processing') {
       return
@@ -1796,7 +2007,6 @@ function App() {
     await ensureAudioEngine()
 
     const context = audioContextRef.current
-    const effectInput = effectInputRef.current
     const scheduledWhen = options?.when
     const fromSequence = options?.fromSequence ?? false
     const targetBankId = options?.bankId ?? currentBankIdRef.current
@@ -1808,7 +2018,7 @@ function App() {
 
     const bankGainNode = bankGainNodesRef.current[targetBankId]
 
-    if (!context || !effectInput || !sampleBuffer || !playbackSettings || !currentPad || !bankGainNode) {
+    if (!context || !sampleBuffer || !playbackSettings || !currentPad || !bankGainNode) {
       return
     }
 
@@ -2184,10 +2394,8 @@ function App() {
       return
     }
 
-    const stepDurationSeconds = 60 / Math.max(40, sequenceTempoRef.current) / 4
-    const elapsedSteps = Math.max(0, (context.currentTime - sequenceStartTimeRef.current) / stepDurationSeconds)
-    const quantizedStepIndex = Math.round(elapsedSteps)
-    const targetStepIndex = ((quantizedStepIndex % seq.sequenceLength) + seq.sequenceLength) % seq.sequenceLength
+    const currentStep = Math.max(0, sequenceStepIndexRef.current - 1)
+    const targetStepIndex = ((currentStep % seq.sequenceLength) + seq.sequenceLength) % seq.sequenceLength
 
     setBankStates((current) => {
       const bank = current[bankId]
@@ -2999,16 +3207,29 @@ function App() {
     })
   }
 
-  const handleEffectSelection = (effectId: string) => {
-    setSelectedEffectId(effectId)
-    setEffectParams(getEffectDefaults(effectId))
+  const handleSlotEffectSelect = (slotId: EffectChainSlotId, effectId: string) => {
+    const defaults = getEffectDefaults(effectId)
+    if (slotId === 'master') {
+      setMasterEffect((prev) => ({ ...prev, effectId, params: defaults }))
+    } else {
+      setBankEffects((prev) => ({ ...prev, [slotId]: { ...prev[slotId], effectId, params: defaults } }))
+    }
   }
 
-  const updateEffectParam = (key: string, value: number) => {
-    setEffectParams((current) => ({
-      ...current,
-      [key]: value,
-    }))
+  const handleSlotParamChange = (slotId: EffectChainSlotId, key: string, value: number) => {
+    if (slotId === 'master') {
+      setMasterEffect((prev) => ({ ...prev, params: { ...prev.params, [key]: value } }))
+    } else {
+      setBankEffects((prev) => ({ ...prev, [slotId]: { ...prev[slotId], params: { ...prev[slotId].params, [key]: value } } }))
+    }
+  }
+
+  const handleSlotToggleEnabled = (slotId: EffectChainSlotId) => {
+    if (slotId === 'master') {
+      setMasterEffect((prev) => ({ ...prev, enabled: !prev.enabled }))
+    } else {
+      setBankEffects((prev) => ({ ...prev, [slotId]: { ...prev[slotId], enabled: !prev[slotId].enabled } }))
+    }
   }
 
   const requestSequencePlan = async (options: {
@@ -3629,7 +3850,7 @@ function App() {
   }
 
   const workViewOrder: WorkView[] = ['editor', 'sequence', 'mixer', 'effects']
-  const workViewDirectionRef = useRef<'left' | 'right' | 'collapse' | 'expand'>('expand')
+  const workViewDirectionRef = useRef<'up' | 'down' | 'collapse' | 'expand'>('expand')
 
   const toggleWorkView = (nextView: WorkView) => {
     setWorkView((current) => {
@@ -3640,25 +3861,25 @@ function App() {
       if (current === null) {
         workViewDirectionRef.current = 'expand'
       } else {
-        workViewDirectionRef.current = workViewOrder.indexOf(nextView) > workViewOrder.indexOf(current) ? 'right' : 'left'
+        workViewDirectionRef.current = workViewOrder.indexOf(nextView) > workViewOrder.indexOf(current) ? 'down' : 'up'
       }
       return nextView
     })
   }
 
   const workSurfaceVariants = {
-    initial: (direction: 'left' | 'right' | 'collapse' | 'expand') => {
+    initial: (direction: 'up' | 'down' | 'collapse' | 'expand') => {
       if (direction === 'expand' || direction === 'collapse') {
         return { height: 0, opacity: 0 }
       }
-      return { x: direction === 'right' ? 40 : -40, opacity: 0 }
+      return { y: direction === 'down' ? 30 : -30, opacity: 0, height: 'auto' }
     },
-    animate: { height: 'auto', opacity: 1, x: 0 },
-    exit: (direction: 'left' | 'right' | 'collapse' | 'expand') => {
+    animate: { height: 'auto', opacity: 1, y: 0 },
+    exit: (direction: 'up' | 'down' | 'collapse' | 'expand') => {
       if (direction === 'collapse' || direction === 'expand') {
         return { height: 0, opacity: 0 }
       }
-      return { x: direction === 'right' ? -40 : 40, opacity: 0 }
+      return { y: direction === 'down' ? -30 : 30, opacity: 0, height: 'auto' }
     },
   }
 
@@ -3683,7 +3904,18 @@ function App() {
       <header className="work-area" aria-label="Sampler work area">
         <div className="work-area-toolbar">
           <div className="work-area-title">
-            <p className="eyebrow">MCP 2000xl</p>
+            <div className="work-area-title-row">
+              <p className="eyebrow">MCP 2000xl</p>
+              <button
+                type="button"
+                className="theme-toggle"
+                onClick={() => setIsDarkMode((c) => !c)}
+                aria-label={isDarkMode ? 'Switch to beige' : 'Switch to blue'}
+                title={isDarkMode ? 'Beige' : 'Blue'}
+              >
+                {isDarkMode ? 'Beige' : 'Blue'}
+              </button>
+            </div>
             <strong>{workViewTitle}</strong>
           </div>
           <div className="work-area-transport" aria-label="Transport controls">
@@ -3783,8 +4015,11 @@ function App() {
                       Loop Source
                     </button>
                   ) : null}
+                  <button type="button" className={editorSource === 'mic' ? 'work-tab is-current' : 'work-tab'} onClick={() => setEditorSource('mic')}>
+                    Mic Record
+                  </button>
                 </div>
-                <label className="editor-transform-bar">
+                <label className="editor-transform-bar" hidden={editorSource === 'mic'}>
                   <input
                     type="text"
                     value={editorTransformPrompt}
@@ -3799,8 +4034,8 @@ function App() {
                     }}
                     maxLength={240}
                     placeholder={editorSource === 'loop'
-                      ? 'Make this loop a breathy woman vocal with glossy pop tone'
-                      : 'Make this a woman voice with airy harmonies and soft rasp'}
+                      ? 'Transform this loop into something new'
+                      : 'Describe how to transform this sample'}
                     aria-label="Describe how ElevenLabs should transform this sound"
                   />
                   <button
@@ -3814,10 +4049,10 @@ function App() {
                     {isTransformingEditorAudio ? 'Sending...' : 'Generate'}
                   </button>
                 </label>
-                <div className="work-surface-actions editor-toolbar-actions">
+                <div className="work-surface-actions editor-toolbar-actions" hidden={editorSource === 'mic'}>
                   <button
                     type="button"
-                    className="secondary-button editor-export-button"
+                    className="work-tab editor-export-button"
                     onClick={() => {
                       void exportCurrentEditorAudio()
                     }}
@@ -3829,6 +4064,83 @@ function App() {
                   </button>
                 </div>
               </div>
+              {editorSource === 'mic' ? (
+                <div className="editor-mic-capture">
+                  <div className="mic-capture-heading">
+                    <div className="mic-capture-title">
+                      <span className="transport-label">Microphone</span>
+                      <strong>Record a take for the sampler</strong>
+                    </div>
+                    <span className={micCaptureState === 'recording' ? 'mic-capture-timer is-live' : 'mic-capture-timer'}>
+                      {micCaptureClockLabel}
+                    </span>
+                  </div>
+
+                  <p className="mic-capture-status" aria-live="polite">
+                    {micRecordingSupported ? micCaptureMessage : 'This browser does not support microphone recording.'}
+                  </p>
+
+                  <div className="mic-capture-controls">
+                    <button
+                      type="button"
+                      className="work-tab mic-capture-control"
+                      onClick={() => { void startMicRecording() }}
+                      disabled={!micRecordingSupported || micCaptureState === 'requesting' || micCaptureState === 'recording' || micCaptureState === 'processing'}
+                    >
+                      <Circle size={13} strokeWidth={2.1} aria-hidden="true" />
+                      <span>
+                        {micCaptureState === 'requesting'
+                          ? 'Allow Mic...'
+                          : micCaptureState === 'recording'
+                            ? 'Recording...'
+                            : 'Record'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="work-tab mic-capture-control"
+                      onClick={stopMicRecording}
+                      disabled={micCaptureState !== 'recording'}
+                    >
+                      <Square size={13} strokeWidth={2.1} aria-hidden="true" />
+                      <span>{micCaptureState === 'processing' ? 'Finishing...' : 'Stop'}</span>
+                    </button>
+                  </div>
+
+                  {recordedTake ? (
+                    <>
+                      <audio ref={micTakeAudioRef} src={recordedTake.previewUrl} hidden />
+                      <div className="waveform-panel" style={{ cursor: 'pointer' }}>
+                        <SampleWaveform
+                          audioUrl={recordedTake.previewUrl}
+                          durationSeconds={recordedTake.durationSeconds}
+                          onWaveformPointerDown={toggleMicTakePreview}
+                        />
+                      </div>
+                      <div className="mic-capture-controls">
+                        <button type="button" className="work-tab is-current" onClick={assignRecordedTakeToSelectedPad}>
+                          Assign to {selectedPad.label}
+                        </button>
+                        <button type="button" className="work-tab" onClick={openRecordedTakeInEditor}>
+                          Chop
+                        </button>
+                        <button type="button" className="work-tab" onClick={clearRecordedTake}>
+                          Discard
+                        </button>
+                        <button
+                          type="button"
+                          className="work-tab"
+                          onClick={() => { void normalizeRecordedTake() }}
+                          disabled={isNormalizingTake}
+                        >
+                          {isNormalizingTake ? 'Normalizing...' : 'Normalize'}
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+              {editorSource !== 'mic' ? (
               <div className="waveform-panel">
                 <SampleWaveform
                   audioUrl={currentEditorAudioUrl}
@@ -3848,6 +4160,7 @@ function App() {
                   onWaveformPointerLeave={editorSource === 'pad' ? () => releasePad(selectedPad.id) : undefined}
                 />
               </div>
+              ) : null}
               {editorSource === 'pad' ? (
                 <div className="editor-pad-footer">
                   <div className={isChromaticModeActive ? 'editor-pad-controls is-chromatic-active' : 'editor-pad-controls'}>
@@ -4103,12 +4416,12 @@ function App() {
               {editorSource === 'loop' && generatedLoop ? (
                 <div className="editor-loop-footer">
                   <div className="work-surface-actions editor-loop-actions">
-                    <button type="button" className="primary-button" onClick={() => { void toggleLoopPreview() }}>
+                    <button type="button" className="work-tab is-current" onClick={() => { void toggleLoopPreview() }}>
                       {isLoopPlaying ? 'Stop Loop' : 'Play Loop'}
                     </button>
                     <button
                       type="button"
-                      className="secondary-button"
+                      className="work-tab"
                       onClick={() => {
                         void normalizeLoopSource()
                       }}
@@ -4118,7 +4431,7 @@ function App() {
                     </button>
                     <button
                       type="button"
-                      className="secondary-button"
+                      className="work-tab"
                       onClick={() => {
                         if (selectedChop) {
                           void auditionLoopChop(selectedChop)
@@ -4130,7 +4443,7 @@ function App() {
                     </button>
                     <button
                       type="button"
-                      className="secondary-button"
+                      className="work-tab"
                       onClick={resetLoopChops}
                       disabled={loopChopRegions.length === 0}
                     >
@@ -4147,7 +4460,7 @@ function App() {
                     </label>
                     <button
                       type="button"
-                      className="primary-button"
+                      className="work-tab is-current"
                       onClick={() => loadLoopToBank(loopTargetBankId)}
                       disabled={loopChopRegions.length === 0}
                     >
@@ -4198,14 +4511,12 @@ function App() {
         ) : workView === 'effects' ? (
           <motion.div key="effects" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
           <EffectsWorkspace
-            selectedEffectId={selectedEffectId}
-            effectEnabled={effectEnabled}
-            effectParams={effectParams}
+            bankEffects={bankEffects}
+            masterEffect={masterEffect}
             effectsList={effectsList}
-            currentEffectConfig={currentEffectConfig}
-            onEffectSelect={handleEffectSelection}
-            onParamChange={updateEffectParam}
-            onToggleEnabled={() => setEffectEnabled((current) => !current)}
+            onSlotEffectSelect={handleSlotEffectSelect}
+            onSlotParamChange={handleSlotParamChange}
+            onSlotToggleEnabled={handleSlotToggleEnabled}
           />
           </motion.div>
         ) : (
@@ -4247,6 +4558,15 @@ function App() {
         <section className="pads panel">
           <div className="panel-heading pads-panel-heading">
             <p className="panel-kicker">Pads</p>
+            <div className="pads-panel-actions">
+              <button
+                type="button"
+                className="secondary-button midi-toggle-button"
+                onClick={() => { void exportKit() }}
+                disabled={isExportingKit}
+              >
+                <span>{isExportingKit ? 'Exporting...' : 'Export Kit'}</span>
+              </button>
             <button
               type="button"
               className={
@@ -4261,6 +4581,7 @@ function App() {
               <span className={selectedMidiInputId ? 'midi-toggle-indicator is-live' : 'midi-toggle-indicator'} aria-hidden="true" />
               <span>MIDI</span>
             </button>
+            </div>
           </div>
 
           <div className="bank-switcher" aria-label="Pad banks">
@@ -4372,23 +4693,19 @@ function App() {
                     <span className="pad-key">{pad.keyTrigger}</span>
                     <span className="pad-group">{groupLabels[pad.group]}</span>
                     <strong>{pad.label}</strong>
+                    {isMidiEnabled ? (
+                      <span
+                        className={isMidiLearningPad ? 'pad-midi-inline is-learning' : 'pad-midi-inline'}
+                        onClick={(e) => { e.stopPropagation(); toggleMidiLearnForPad(pad) }}
+                        title={isMidiLearningPad
+                          ? `Press a MIDI note to map ${pad.label}.`
+                          : `Map a MIDI note to ${pad.label}. Current note: ${formatMidiNoteLabel(midiNoteNumber)}.`}
+                      >
+                        {isMidiLearningPad ? 'MIDI: Learn...' : `MIDI: ${formatMidiNoteLabel(midiNoteNumber)}`}
+                      </span>
+                    ) : null}
                     <span className="pad-sample">{pad.sampleName}</span>
                   </button>
-                  {isMidiEnabled ? (
-                    <button
-                      type="button"
-                      className={isMidiLearningPad ? 'pad-midi-badge is-learning' : 'pad-midi-badge'}
-                      aria-pressed={isMidiLearningPad}
-                      onClick={() => toggleMidiLearnForPad(pad)}
-                      disabled={!midiSupported}
-                      title={isMidiLearningPad
-                        ? `Press a MIDI note to map ${pad.label}.`
-                        : `Map a MIDI note to ${pad.label}. Current note: ${formatMidiNoteLabel(midiNoteNumber)}.`}
-                    >
-                      <span>MIDI</span>
-                      <strong>{isMidiLearningPad ? 'Press Note' : formatMidiNoteLabel(midiNoteNumber)}</strong>
-                    </button>
-                  ) : null}
                 </div>
               )
             })}
@@ -4401,19 +4718,8 @@ function App() {
           generationStatus={generationStatus}
           generationMode={generationMode}
           generationMessage={generationMessage}
-          micCaptureState={micCaptureState}
-          micCaptureMessage={micCaptureMessage}
-          micCaptureClockLabel={micCaptureClockLabel}
-          micRecordingSupported={micRecordingSupported}
-          recordedTake={recordedTake}
-          selectedPad={selectedPad}
           onPromptChange={setPromptText}
           onGenerateAudio={(mode) => { void generateAudio(mode) }}
-          onStartRecording={() => { void startMicRecording() }}
-          onStopRecording={stopMicRecording}
-          onAssignToPad={assignRecordedTakeToSelectedPad}
-          onOpenInEditor={openRecordedTakeInEditor}
-          onClearTake={clearRecordedTake}
         />
 
       </section>

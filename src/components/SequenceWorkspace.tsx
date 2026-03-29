@@ -88,7 +88,7 @@ export function SequenceWorkspace({
               type="text"
               value={sequencePromptText}
               onChange={(event) => onPromptChange(event.target.value)}
-              placeholder="Describe the groove you want for this bank"
+              placeholder="Describe the sequence you want"
               aria-label="Generate sequence prompt"
             />
           </div>

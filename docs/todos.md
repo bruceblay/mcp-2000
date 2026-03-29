@@ -6,9 +6,7 @@
 - analytics (5)
 - fx sequencer?
 - sample envelope (4)
-- edit pad color(s) (2)
 - drag/drop sound file onto sample editor to display it on loop edit view
-- dark mode?
 - key and scale selection?  these get auto fed into our generative tool calls
 - some bugs with the chromatic punch in recording 
 - better default kits: 1 loop, 1 bass, one reg drum, one sea shell drum
@@ -16,7 +14,4 @@
 - info modal?
 - trigger probability on each step? maybe a right click with a percentage slider?
 - hosting
-- finalize name (mcp 2000 isn't so bad actually)
-- mpc 2000 color scheme (beige, red, yellowish-orange, blue, slider, font)
-
-- design looks horrible (7)
+- song mode?

@@ -4,6 +4,15 @@ import type { WaveformRegion } from './components/sample-waveform'
 export const bankIds = ['A', 'B', 'C', 'D'] as const
 export type BankId = (typeof bankIds)[number]
 
+export type EffectChainSlotId = BankId | 'master'
+export const effectChainSlotIds: readonly EffectChainSlotId[] = [...bankIds, 'master']
+
+export type EffectChainState = {
+  effectId: string
+  params: Record<string, number>
+  enabled: boolean
+}
+
 export type EngineStatus = 'idle' | 'loading' | 'ready' | 'error'
 export type GenerationStatus = 'idle' | 'generating' | 'error'
 export type GenerationMode = 'kit' | 'pad' | 'loop'
@@ -12,7 +21,7 @@ export type MicCaptureState = 'idle' | 'requesting' | 'recording' | 'processing'
 export type WorkView = 'editor' | 'sequence' | 'mixer' | 'effects'
 export type ArpMode = 'up' | 'down' | 'up-down' | 'random' | 'order'
 export type ArpDivision = '1/4' | '1/8' | '1/16' | '1/32' | '1/4T' | '1/8T'
-export type EditorSource = 'pad' | 'loop'
+export type EditorSource = 'pad' | 'loop' | 'mic'
 export type PlaybackMode = 'one-shot' | 'loop' | 'gate' | 'gate-loop'
 
 export type RecordedTake = {

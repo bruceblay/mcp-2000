@@ -7,9 +7,10 @@ export const midiSelectedInputStorageKey = 'mcp-2000-midi-input-id'
 export const defaultMidiBaseNote = 36
 
 export const promptPresets = [
-  'Boom bap drum kit with dusty hats and a warm vinyl kick',
-  '4-bar Detroit techno loop at 132 BPM',
-  'Minimal percussion kit made from kitchen sounds',
+  'Percussion kit made from cracking ice, dripping water, and frozen lake resonance',
+  'Zen flute melody with windchimes and flowing water — 85 BPM loop',
+  'Deep forest floor kit with fallen branches, wet moss thuds, and bird call stabs',
+  'Utopian, otherworldly bird songs - 78bpm loop',
 ]
 
 export const groupLabels: Record<string, string> = {

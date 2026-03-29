@@ -50,12 +50,12 @@ const buildSamplePeaks = (channelData: Float32Array[], sampleCount = 960) => {
     return []
   }
 
-  const blockSize = Math.max(1, Math.floor(primary.length / sampleCount))
+  const totalSamples = primary.length
   const peaks: number[] = []
 
   for (let index = 0; index < sampleCount; index += 1) {
-    const start = index * blockSize
-    const end = Math.min(primary.length, start + blockSize)
+    const start = Math.floor((index / sampleCount) * totalSamples)
+    const end = Math.floor(((index + 1) / sampleCount) * totalSamples)
     let peak = 0
 
     for (let frame = start; frame < end; frame += 1) {
@@ -106,7 +106,7 @@ const decodeWithAudioContext = async (audioData: ArrayBuffer): Promise<DecodedWa
 
   try {
     const decodedBuffer = await audioContext.decodeAudioData(audioData.slice(0))
-    const channelData = Array.from({ length: decodedBuffer.numberOfChannels }, (_, index) => decodedBuffer.getChannelData(index))
+    const channelData = Array.from({ length: decodedBuffer.numberOfChannels }, (_, index) => new Float32Array(decodedBuffer.getChannelData(index)))
 
     return {
       duration: decodedBuffer.duration,
@@ -120,7 +120,7 @@ const decodeWithAudioContext = async (audioData: ArrayBuffer): Promise<DecodedWa
 const decodeWithOfflineContext = async (audioData: ArrayBuffer): Promise<DecodedWaveform> => {
   const offlineContext = new OfflineAudioContext(1, 1, 44100)
   const decodedBuffer = await offlineContext.decodeAudioData(audioData.slice(0))
-  const channelData = Array.from({ length: decodedBuffer.numberOfChannels }, (_, index) => decodedBuffer.getChannelData(index))
+  const channelData = Array.from({ length: decodedBuffer.numberOfChannels }, (_, index) => new Float32Array(decodedBuffer.getChannelData(index)))
 
   return {
     duration: decodedBuffer.duration,
@@ -208,44 +208,57 @@ export function SampleWaveform({
       return
     }
 
-    const context = canvas.getContext('2d')
-    if (!context) {
-      return
-    }
+    const drawWaveform = () => {
+      const context = canvas.getContext('2d')
+      if (!context) {
+        return
+      }
 
-    const width = canvas.clientWidth || 960
-    const height = canvas.clientHeight || 208
-    const dpr = window.devicePixelRatio || 1
+      const width = canvas.clientWidth || 960
+      const height = canvas.clientHeight || 208
+      const dpr = window.devicePixelRatio || 1
 
-    canvas.width = width * dpr
-    canvas.height = height * dpr
-    context.setTransform(dpr, 0, 0, dpr, 0, 0)
-    context.clearRect(0, 0, width, height)
+      canvas.width = width * dpr
+      canvas.height = height * dpr
+      context.setTransform(dpr, 0, 0, dpr, 0, 0)
+      context.clearRect(0, 0, width, height)
 
-    if (displayPeaks.length === 0) {
-      context.strokeStyle = 'rgba(70, 78, 82, 0.35)'
+      if (displayPeaks.length === 0) {
+        context.strokeStyle = 'rgba(70, 78, 82, 0.35)'
+        context.beginPath()
+        context.moveTo(0, height / 2)
+        context.lineTo(width, height / 2)
+        context.stroke()
+        return
+      }
+
+      const middle = height / 2
+      const step = width / displayPeaks.length
+
+      context.strokeStyle = '#1a2a10'
+      context.lineWidth = 1
       context.beginPath()
-      context.moveTo(0, height / 2)
-      context.lineTo(width, height / 2)
+
+      displayPeaks.forEach((peak, index) => {
+        const x = index * step
+        const amplitude = Math.max(1, peak * (height * 0.46))
+        context.moveTo(x, middle - amplitude / 2)
+        context.lineTo(x, middle + amplitude / 2)
+      })
+
       context.stroke()
-      return
     }
 
-    const middle = height / 2
-    const step = width / displayPeaks.length
+    // Defer draw to ensure layout is settled after animations
+    const frameId = requestAnimationFrame(drawWaveform)
 
-    context.strokeStyle = '#1a2a10'
-    context.lineWidth = 1
-    context.beginPath()
+    const observer = new ResizeObserver(() => drawWaveform())
+    observer.observe(canvas)
 
-    displayPeaks.forEach((peak, index) => {
-      const x = index * step
-      const amplitude = Math.max(1, peak * (height * 0.46))
-      context.moveTo(x, middle - amplitude / 2)
-      context.lineTo(x, middle + amplitude / 2)
-    })
-
-    context.stroke()
+    return () => {
+      cancelAnimationFrame(frameId)
+      observer.disconnect()
+    }
   }, [displayPeaks])
 
   useEffect(() => {
@@ -275,7 +288,7 @@ export function SampleWaveform({
           }
 
           setDurationSeconds(decoded.duration)
-          setFallbackPeaks(buildSamplePeaks(decoded.channelData))
+          setFallbackPeaks(buildSamplePeaks(decoded.channelData, 1920))
           onStatusChange?.('ready')
           return
         } catch (decodeError) {

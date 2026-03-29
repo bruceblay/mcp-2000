@@ -2,7 +2,8 @@ import type { Pad } from './mock-kit'
 import type { BankKitId } from './mock-kit'
 import { starterBankPads } from './kit-generation'
 import { padSlotIds, defaultMidiBaseNote, midiStorageKey, midiSelectedInputStorageKey } from './constants'
-import { bankIds, type BankId, type BankState, type Sequence, type PadPlaybackSetting, type MidiPadNoteMappings } from './types'
+import { bankIds, type BankId, type BankState, type Sequence, type EffectChainState, type PadPlaybackSetting, type MidiPadNoteMappings } from './types'
+import { getEffectDefaults } from './effects'
 
 export const createInitialBankMixerGains = () =>
   Object.fromEntries(bankIds.map((bankId) => [bankId, 1])) as Record<BankId, number>
@@ -60,6 +61,15 @@ export const createInitialBankState = (bankId: BankKitId): BankState => ({
 
 export const createInitialBanksState = () =>
   Object.fromEntries(bankIds.map((bankId) => [bankId, createInitialBankState(bankId)])) as Record<BankId, BankState>
+
+export const createInitialEffectChain = (): EffectChainState => ({
+  effectId: 'simplefilter',
+  params: getEffectDefaults('simplefilter'),
+  enabled: false,
+})
+
+export const createInitialBankEffects = () =>
+  Object.fromEntries(bankIds.map((bankId) => [bankId, createInitialEffectChain()])) as Record<BankId, EffectChainState>
 
 export const createDefaultMidiPadMappings = (): MidiPadNoteMappings =>
   Object.fromEntries(padSlotIds.map((padId, index) => [padId, defaultMidiBaseNote + index])) as MidiPadNoteMappings
