@@ -9,7 +9,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "noUnusedLocals": true,
-    "noUnusedParameters": true
+    "noUnusedParameters": true,
+    "types": ["node"]
   },
   "include": ["api"]
 }
