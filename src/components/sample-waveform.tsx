@@ -188,9 +188,17 @@ export function SampleWaveform({
   const regionsOverlayRef = useRef<HTMLDivElement | null>(null)
   const markerChangeRef = useRef(onMarkerChange)
   const regionsChangeRef = useRef(onRegionsChange)
+  const markerStartRef = useRef(markerStartFraction)
+  const markerEndRef = useRef(markerEndFraction)
+  const regionsRef = useRef(regions)
+  const regionDurationRef = useRef(regionDurationSeconds)
 
   markerChangeRef.current = onMarkerChange
   regionsChangeRef.current = onRegionsChange
+  markerStartRef.current = markerStartFraction
+  markerEndRef.current = markerEndFraction
+  regionsRef.current = regions
+  regionDurationRef.current = regionDurationSeconds
 
   const emptyMessage = useMemo(() => {
     return audioUrl ? null : 'Generate or select audio to inspect it here.'
@@ -326,14 +334,15 @@ export function SampleWaveform({
       return
     }
 
-    const startFraction = markerStartFraction ?? 0
-    const endFraction = markerEndFraction ?? 1
+    const beginDrag = (field: MarkerDragField, pointerId: number, target: HTMLElement) => {
+      target.setPointerCapture(pointerId)
 
-    const beginDrag = (field: MarkerDragField, pointerId: number) => {
       const updateFromPointer = (clientX: number) => {
         const bounds = overlay.getBoundingClientRect()
         const relative = Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width))
         const mappedRelative = reversed ? 1 - relative : relative
+        const startFraction = markerStartRef.current ?? 0
+        const endFraction = markerEndRef.current ?? 1
         if (field === 'start') {
           markerChangeRef.current?.('start', Math.min(mappedRelative, endFraction - 0.01))
           return
@@ -355,12 +364,15 @@ export function SampleWaveform({
           return
         }
 
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', stopDrag)
+        target.releasePointerCapture(pointerId)
+        target.removeEventListener('pointermove', handlePointerMove)
+        target.removeEventListener('pointerup', stopDrag)
+        target.removeEventListener('pointercancel', stopDrag)
       }
 
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', stopDrag)
+      target.addEventListener('pointermove', handlePointerMove)
+      target.addEventListener('pointerup', stopDrag)
+      target.addEventListener('pointercancel', stopDrag)
     }
 
     const startHandle = overlay.querySelector<HTMLElement>('[data-marker-handle="start"]')
@@ -368,12 +380,12 @@ export function SampleWaveform({
 
     const handleStartPointerDown = (event: PointerEvent) => {
       event.preventDefault()
-      beginDrag(reversed ? 'end' : 'start', event.pointerId)
+      beginDrag(reversed ? 'end' : 'start', event.pointerId, event.currentTarget as HTMLElement)
     }
 
     const handleEndPointerDown = (event: PointerEvent) => {
       event.preventDefault()
-      beginDrag(reversed ? 'start' : 'end', event.pointerId)
+      beginDrag(reversed ? 'start' : 'end', event.pointerId, event.currentTarget as HTMLElement)
     }
 
     startHandle?.addEventListener('pointerdown', handleStartPointerDown)
@@ -383,7 +395,7 @@ export function SampleWaveform({
       startHandle?.removeEventListener('pointerdown', handleStartPointerDown)
       endHandle?.removeEventListener('pointerdown', handleEndPointerDown)
     }
-  }, [markerEndFraction, markerStartFraction, reversed])
+  }, [reversed])
 
   useEffect(() => {
     const overlay = regionsOverlayRef.current
@@ -391,32 +403,36 @@ export function SampleWaveform({
       return
     }
 
-    const beginResize = (regionId: string, edge: 'start' | 'end', pointerId: number) => {
+    const beginResize = (regionId: string, edge: 'start' | 'end', pointerId: number, target: HTMLElement) => {
+      target.setPointerCapture(pointerId)
+
       const updateFromPointer = (clientX: number) => {
         const bounds = overlay.getBoundingClientRect()
+        const currentRegions = regionsRef.current
+        const duration = regionDurationRef.current
         const relative = Math.min(1, Math.max(0, (clientX - bounds.left) / bounds.width))
-        const nextTime = relative * regionDurationSeconds
-        const index = regions.findIndex((region) => region.id === regionId)
+        const nextTime = relative * duration
+        const index = currentRegions.findIndex((region) => region.id === regionId)
         if (index < 0) {
           return
         }
 
-        const nextRegions = regions.map((region) => ({ ...region }))
-        const target = nextRegions[index]
+        const nextRegions = currentRegions.map((region) => ({ ...region }))
+        const regionTarget = nextRegions[index]
 
         if (edge === 'start') {
           const minStart = index === 0 ? 0 : nextRegions[index - 1].start + 0.01
-          const maxStart = target.end - 0.01
+          const maxStart = regionTarget.end - 0.01
           const start = Math.min(Math.max(nextTime, minStart), maxStart)
-          target.start = start
+          regionTarget.start = start
           if (index > 0) {
             nextRegions[index - 1].end = start
           }
         } else {
-          const minEnd = target.start + 0.01
-          const maxEnd = index === nextRegions.length - 1 ? regionDurationSeconds : nextRegions[index + 1].end - 0.01
+          const minEnd = regionTarget.start + 0.01
+          const maxEnd = index === nextRegions.length - 1 ? duration : nextRegions[index + 1].end - 0.01
           const end = Math.min(Math.max(nextTime, minEnd), maxEnd)
-          target.end = end
+          regionTarget.end = end
           if (index < nextRegions.length - 1) {
             nextRegions[index + 1].start = end
           }
@@ -438,12 +454,15 @@ export function SampleWaveform({
           return
         }
 
-        window.removeEventListener('pointermove', handlePointerMove)
-        window.removeEventListener('pointerup', stopDrag)
+        target.releasePointerCapture(pointerId)
+        target.removeEventListener('pointermove', handlePointerMove)
+        target.removeEventListener('pointerup', stopDrag)
+        target.removeEventListener('pointercancel', stopDrag)
       }
 
-      window.addEventListener('pointermove', handlePointerMove)
-      window.addEventListener('pointerup', stopDrag)
+      target.addEventListener('pointermove', handlePointerMove)
+      target.addEventListener('pointerup', stopDrag)
+      target.addEventListener('pointercancel', stopDrag)
     }
 
     const handles = overlay.querySelectorAll<HTMLElement>('[data-region-handle]')
@@ -459,7 +478,7 @@ export function SampleWaveform({
       const onPointerDown = (event: PointerEvent) => {
         event.preventDefault()
         event.stopPropagation()
-        beginResize(regionId, edge, event.pointerId)
+        beginResize(regionId, edge, event.pointerId, event.currentTarget as HTMLElement)
       }
 
       handle.addEventListener('pointerdown', onPointerDown)

@@ -805,6 +805,7 @@ button:active:not(:disabled) {
   inset: 0;
   z-index: 3;
   pointer-events: none;
+  touch-action: none;
 }
 
 .sample-waveform__trim-mask {
