@@ -162,7 +162,7 @@ export function SequenceWorkspace({
         <div className="sequencer-grid-scroll">
           <div
             className="sequencer-grid"
-            style={{ gridTemplateColumns: `12.75rem repeat(${currentSequenceLength}, minmax(2.35rem, 2.35rem))` }}
+            style={{ gridTemplateColumns: `var(--seq-pad-col, 12.75rem) repeat(${currentSequenceLength}, minmax(2.35rem, 2.35rem))` }}
           >
             <div className="sequencer-corner">Pads</div>
             {Array.from({ length: currentSequenceLength }, (_, stepIndex) => (

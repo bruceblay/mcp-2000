@@ -3912,11 +3912,11 @@ function App() {
     workView === 'editor'
       ? 'Sample Editor'
       : workView === 'sequence'
-        ? 'Sequence Work Area'
+        ? 'Sequencer'
         : workView === 'mixer'
           ? 'Mixer'
           : workView === 'effects'
-            ? 'Effects Rack'
+            ? 'Effects'
             : 'Workspace'
 
   return (

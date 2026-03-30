@@ -2564,6 +2564,8 @@ button:active:not(:disabled) {
   min-width: 0;
   min-height: 3.2rem;
   background: var(--lcd-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 .sequencer-lane-label {
@@ -2711,21 +2713,6 @@ button:active:not(:disabled) {
   .grid-panel {
     order: 0;
   }
-
-}
-
-@media (max-width: 830px) {
-  .editor-pad-controls.is-chromatic-active {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "modes"
-      "info"
-      "keys";
-  }
-
-  .editor-pad-controls.is-chromatic-active .editor-info-knobs {
-    margin-left: 0;
-  }
 }
 
 @media (max-width: 885px) {
@@ -2752,7 +2739,25 @@ button:active:not(:disabled) {
   }
 }
 
+@media (max-width: 830px) {
+  .editor-pad-controls.is-chromatic-active {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "modes"
+      "info"
+      "keys";
+  }
+
+  .editor-pad-controls.is-chromatic-active .editor-info-knobs {
+    margin-left: 0;
+  }
+}
+
 @media (max-width: 720px) {
+  .app-shell {
+    width: min(calc(100% - 1rem), var(--page-max-width));
+  }
+
   .sequencer-toolbar {
     display: flex;
     flex-wrap: wrap;
@@ -2775,10 +2780,6 @@ button:active:not(:disabled) {
     order: 3;
   }
 
-  .app-shell {
-    width: min(calc(100% - 1rem), var(--page-max-width));
-  }
-
   .work-surface-meta,
   .work-surface-meta.compact {
     gap: 0.4rem 0.8rem;
@@ -2799,29 +2800,6 @@ button:active:not(:disabled) {
 
   .midi-panel-header {
     align-items: stretch;
-  }
-
-
-  .editor-toolbar {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-      "tabs tabs"
-      "transform export";
-    gap: 0.5rem;
-  }
-
-  .editor-source-tabs {
-    grid-area: tabs;
-  }
-
-  .editor-transform-bar {
-    grid-area: transform;
-    min-width: 0;
-  }
-
-  .editor-toolbar-actions {
-    grid-area: export;
   }
 
   .editor-chromatic-white-keys {
@@ -2847,16 +2825,13 @@ button:active:not(:disabled) {
     width: 100%;
   }
 
-  .mixer-bank-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .mixer-section {
+    overflow-x: auto;
   }
 
-  .mixer-export-strip {
-    grid-column: span 4;
-  }
-
+  .mixer-bank-grid,
   .mixer-pad-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    min-width: 650px;
   }
 
   .bank-switcher {
@@ -2888,6 +2863,126 @@ button:active:not(:disabled) {
   .parameter-list article {
     align-items: start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 630px) {
+  .editor-pad-controls:not(.is-chromatic-active) .editor-info-knobs {
+    flex-wrap: wrap;
+  }
+
+  .editor-pad-controls:not(.is-chromatic-active) .editor-info-knobs .editor-pad-meta {
+    width: 100%;
+    flex-basis: 100%;
+  }
+}
+
+@media (max-width: 585px) {
+  .work-area-toolbar {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .work-area-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .work-area-transport {
+    justify-self: stretch;
+    justify-content: center;
+    position: relative;
+  }
+
+  .work-area-transport .transport-field-inline {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .work-area-tabs {
+    grid-column: 1;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .mixer-pad-section-heading {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+}
+
+@media (max-width: 495px) {
+  .editor-pad-controls.is-chromatic-active {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-chromatic-panel {
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .editor-playback-mode-group {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 465px) {
+  .editor-pad-controls.is-chromatic-active .editor-info-knobs {
+    flex-wrap: wrap;
+  }
+
+  .editor-pad-controls.is-chromatic-active .editor-info-knobs .editor-pad-meta {
+    display: flex;
+    gap: 0.6rem;
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .editor-pad-controls.is-chromatic-active .editor-info-knobs .editor-pad-meta article {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    width: auto;
+  }
+}
+
+@media (max-width: 460px) {
+  .pad {
+    min-height: 5rem;
+    padding: 0.55rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .sequencer-grid {
+    --seq-pad-col: 6.5rem;
+  }
+}
+
+@media (max-width: 415px) {
+  .work-area-title {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .work-area-transport {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .work-area-transport .transport-field-inline {
+    position: static;
+    transform: none;
+    width: 100%;
+    justify-content: center;
   }
 }
 
