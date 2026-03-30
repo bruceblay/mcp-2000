@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { transformSampleSchema, executeTransformSample } from './_shared'
+import { transformSampleSchema, executeTransformSample } from './_shared/index.js'
 
 export const config = { maxDuration: 60 }
 

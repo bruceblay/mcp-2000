@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requestSchema, executeGenerateKit } from './_shared'
+import { requestSchema, executeGenerateKit } from './_shared/index.js'
 
 export const config = { maxDuration: 60 }
 
