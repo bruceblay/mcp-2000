@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#3a3530"/>
+  <!-- 3x3 pad grid -->
+  <rect x="3" y="3" width="7" height="7" rx="1.4" fill="#ddd7cb"/>
+  <rect x="12.5" y="3" width="7" height="7" rx="1.4" fill="#b0aaa2"/>
+  <rect x="22" y="3" width="7" height="7" rx="1.4" fill="#d5cec2"/>
+  <rect x="3" y="12.5" width="7" height="7" rx="1.4" fill="#b0aaa2"/>
+  <rect x="12.5" y="12.5" width="7" height="7" rx="1.4" fill="#d5cec2"/>
+  <rect x="22" y="12.5" width="7" height="7" rx="1.4" fill="#b0aaa2"/>
+  <rect x="3" y="22" width="7" height="7" rx="1.4" fill="#d5cec2"/>
+  <rect x="12.5" y="22" width="7" height="7" rx="1.4" fill="#b0aaa2"/>
+  <rect x="22" y="22" width="7" height="7" rx="1.4" fill="#ddd7cb"/>
+</svg>
