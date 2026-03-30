@@ -451,6 +451,14 @@ function App() {
 
   useEffect(() => {
     let unlocked = false
+    // Tiny silent MP3 data URI — forces iOS WebKit to activate the media audio
+    // channel instead of the ringer channel. Without this, Web Audio API output
+    // is routed through the ringer channel which can be muted on iOS.
+    const SILENT_MP3 = 'data:audio/mpeg;base64,SUQzBAAAAAABEVRYWFgAAAAtAAADY29tbWVudABCaWdTb3VuZEJhbmsuY29tIC8gTGFTb25vdGhlcXVlLm9yZwBURU5DAAAAHQAAA1N3aXRjaCBQbHVzIMKpIE5DSCBTb2Z0d2FyZQBUSVQyAAAABgAAAzIyMzUAVFNTRQAAAA8AAANMYXZmNTcuODMuMTAwAAAAAAAAAAAAAAD/80DEAAAAA0gAAAAATEFNRTMuMTAwVVVVVVVVVVVVVUxBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQsRbAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/zQMSkAAADSAAAAABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ=='
+
+    const isContextBlocked = (ctx: AudioContext) =>
+      ctx.state === 'suspended' || (ctx.state as string) === 'interrupted'
+
     const unlockAudio = () => {
       if (unlocked) return
       const ctx = audioContextRef.current
@@ -459,17 +467,27 @@ function App() {
         unlocked = true
         return
       }
-      ctx.resume().then(() => {
-        // Play a silent buffer to fully unlock audio on iOS WebKit.
-        // iOS requires an AudioBufferSourceNode.start() during a user gesture,
-        // resume() alone is not sufficient.
+      if (isContextBlocked(ctx)) {
+        // Don't chain after resume() — it can hang on iOS. Fire both in parallel.
+        ctx.resume().catch(() => {})
+
+        // Play a silent AudioBufferSourceNode
         const silent = ctx.createBuffer(1, 1, ctx.sampleRate)
         const src = ctx.createBufferSource()
         src.buffer = silent
         src.connect(ctx.destination)
         src.start()
-        unlocked = true
-      }).catch(() => {})
+
+        // Play a silent HTML <audio> element to force iOS to activate the media
+        // audio channel. This is the key fix: Web Audio alone routes through the
+        // ringer channel on iOS, which can be silent.
+        const audio = new Audio(SILENT_MP3)
+        audio.loop = true
+        audio.volume = 0.01
+        audio.setAttribute('playsinline', '')
+        audio.play().catch(() => {})
+      }
+      unlocked = true
     }
     document.addEventListener('touchstart', unlockAudio)
     document.addEventListener('touchend', unlockAudio)
@@ -1082,7 +1100,7 @@ function App() {
 
   const getAudioContext = () => {
     if (!audioContextRef.current) {
-      const context = new window.AudioContext()
+      const context = new window.AudioContext({ sampleRate: 44100 })
       const masterGain = context.createGain()
       const outputLimiter = context.createDynamicsCompressor()
       masterGain.gain.value = masterOutputGain
@@ -1123,7 +1141,7 @@ function App() {
       masterGainRef.current = masterGain
     }
 
-    if (audioContextRef.current.state === 'suspended') {
+    if (audioContextRef.current.state === 'suspended' || (audioContextRef.current.state as string) === 'interrupted') {
       void audioContextRef.current.resume()
     }
 
@@ -1137,7 +1155,7 @@ function App() {
     }
 
     const context = getAudioContext()
-    if (context.state === 'suspended') {
+    if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
       await context.resume()
     }
 
@@ -1160,7 +1178,7 @@ function App() {
   const ensureAudioEngine = async () => {
     if (engineStatus === 'ready') {
       const context = getAudioContext()
-      if (context.state === 'suspended') {
+      if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
         await context.resume()
       }
       return
@@ -1169,7 +1187,7 @@ function App() {
     if (loadPromiseRef.current) {
       await loadPromiseRef.current
       const context = audioContextRef.current
-      if (context && context.state === 'suspended') {
+      if (context && (context.state === 'suspended' || (context.state as string) === 'interrupted')) {
         await context.resume()
       }
       return
@@ -1183,7 +1201,7 @@ function App() {
         setLoadedPadCount(bufferMapRef.current.size)
 
         const context = getAudioContext()
-        if (context.state === 'suspended') {
+        if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
           await context.resume()
         }
 
@@ -2483,7 +2501,7 @@ function App() {
     await ensureAudioEngine()
 
     const context = getAudioContext()
-    if (context.state === 'suspended') {
+    if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
       await context.resume()
     }
 
@@ -3668,7 +3686,7 @@ function App() {
     }
 
     const context = getAudioContext()
-    if (context.state === 'suspended') {
+    if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
       await context.resume()
     }
 
@@ -4011,7 +4029,7 @@ function App() {
 
                 if (nextEnabled) {
                   const context = getAudioContext()
-                  if (context.state === 'suspended') {
+                  if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
                     void context.resume()
                   }
                 } else {

@@ -102,7 +102,7 @@ const decodeWithAudioContext = async (audioData: ArrayBuffer): Promise<DecodedWa
     throw new Error('AudioContext unavailable for waveform decode')
   }
 
-  const audioContext = new AudioContextCtor()
+  const audioContext = new AudioContextCtor({ sampleRate: 44100 })
 
   try {
     const decodedBuffer = await audioContext.decodeAudioData(audioData.slice(0))
