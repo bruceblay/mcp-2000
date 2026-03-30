@@ -683,6 +683,10 @@ button:active:not(:disabled) {
 .sample-waveform {
   position: relative;
   min-height: 6.75rem;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .sample-waveform.is-auditionable {
