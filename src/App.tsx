@@ -450,14 +450,30 @@ function App() {
   }, [])
 
   useEffect(() => {
+    let unlocked = false
     const unlockAudio = () => {
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {})
+      if (unlocked) return
+      const ctx = audioContextRef.current
+      if (!ctx) return
+      if (ctx.state === 'running') {
+        unlocked = true
+        return
       }
+      ctx.resume().then(() => {
+        // Play a silent buffer to fully unlock audio on iOS WebKit.
+        // iOS requires an AudioBufferSourceNode.start() during a user gesture,
+        // resume() alone is not sufficient.
+        const silent = ctx.createBuffer(1, 1, ctx.sampleRate)
+        const src = ctx.createBufferSource()
+        src.buffer = silent
+        src.connect(ctx.destination)
+        src.start()
+        unlocked = true
+      }).catch(() => {})
     }
-    document.addEventListener('touchstart', unlockAudio, { once: false })
-    document.addEventListener('touchend', unlockAudio, { once: false })
-    document.addEventListener('click', unlockAudio, { once: false })
+    document.addEventListener('touchstart', unlockAudio)
+    document.addEventListener('touchend', unlockAudio)
+    document.addEventListener('click', unlockAudio)
     return () => {
       document.removeEventListener('touchstart', unlockAudio)
       document.removeEventListener('touchend', unlockAudio)

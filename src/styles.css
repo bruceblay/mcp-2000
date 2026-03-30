@@ -1640,6 +1640,7 @@ button:active:not(:disabled) {
   text-transform: none;
   color: var(--text-muted);
   border: none;
+  border-radius: 0;
   background: #d5cfc5;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
@@ -2090,13 +2091,10 @@ button:active:not(:disabled) {
   position: absolute;
   top: 0.45rem;
   right: 0.45rem;
-  padding: 0.12rem 0.32rem;
   font-size: 0.61rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  background: oklch(1 0 0 / 0.5);
-  border-radius: 4px;
 }
 
 .pad-drums,
@@ -2537,7 +2535,8 @@ button:active:not(:disabled) {
   z-index: 2;
   display: grid;
   place-items: center;
-  height: 2.5rem;
+  align-self: stretch;
+  min-height: 2.5rem;
   background: var(--lcd-bg);
   color: var(--lcd-text-muted);
   font-size: 0.74rem;
