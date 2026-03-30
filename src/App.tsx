@@ -2438,6 +2438,7 @@ function App() {
       return
     }
 
+    getAudioContext()
     await ensureAudioEngine()
 
     const context = getAudioContext()
@@ -2611,6 +2612,7 @@ function App() {
   }
 
   const triggerPadInBank = (padId: string, bankId: BankId) => {
+    getAudioContext()
     setBankStates((current) => ({
       ...current,
       [bankId]: {
@@ -2941,6 +2943,7 @@ function App() {
   }, [isArpEnabled])
 
   const triggerChromaticKey = (semitoneOffset: number) => {
+    getAudioContext()
     const relativeSemitone = getChromaticRelativeSemitone(chromaticOctave, semitoneOffset)
 
     if (isArpEnabled) {

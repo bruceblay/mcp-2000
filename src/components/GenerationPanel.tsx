@@ -37,7 +37,7 @@ export function GenerationPanel({
           type="button"
           className="primary-button"
           onClick={() => onGenerateAudio('kit')}
-          disabled={generationStatus === 'generating'}
+          disabled={generationStatus === 'generating' || !promptText.trim()}
         >
           {generationStatus === 'generating' && generationMode === 'kit' ? 'Generating...' : 'Generate Kit'}
         </button>
@@ -45,7 +45,7 @@ export function GenerationPanel({
           type="button"
           className="secondary-button"
           onClick={() => onGenerateAudio('loop')}
-          disabled={generationStatus === 'generating'}
+          disabled={generationStatus === 'generating' || !promptText.trim()}
         >
           {generationStatus === 'generating' && generationMode === 'loop' ? 'Generating...' : 'Generate Loop'}
         </button>
