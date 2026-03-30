@@ -191,14 +191,13 @@ export function SampleWaveform({
   const markerStartRef = useRef(markerStartFraction)
   const markerEndRef = useRef(markerEndFraction)
   const regionsRef = useRef(regions)
-  const regionDurationRef = useRef(regionDurationSeconds)
+  const regionDurationRef = useRef<number>(0)
 
   markerChangeRef.current = onMarkerChange
   regionsChangeRef.current = onRegionsChange
   markerStartRef.current = markerStartFraction
   markerEndRef.current = markerEndFraction
   regionsRef.current = regions
-  regionDurationRef.current = regionDurationSeconds
 
   const emptyMessage = useMemo(() => {
     return audioUrl ? null : 'Generate or select audio to inspect it here.'
@@ -206,6 +205,7 @@ export function SampleWaveform({
 
   const displayPeaks = useMemo(() => (reversed ? [...fallbackPeaks].reverse() : fallbackPeaks), [fallbackPeaks, reversed])
   const regionDurationSeconds = knownDurationSeconds && knownDurationSeconds > 0 ? knownDurationSeconds : durationSeconds
+  regionDurationRef.current = regionDurationSeconds
   const visualMarkerStartFraction = reversed ? 1 - (markerEndFraction ?? 1) : markerStartFraction ?? 0
   const visualMarkerEndFraction = reversed ? 1 - (markerStartFraction ?? 0) : markerEndFraction ?? 1
   const visualPlayheadFraction = playheadFraction === null ? null : reversed ? 1 - playheadFraction : playheadFraction
