@@ -1194,8 +1194,6 @@ function App() {
       return
     }
 
-    const uniquePads = Array.from(new Map(allPads.map((pad) => [pad.sampleUrl, pad])).values())
-
     const loadTask = (async () => {
       try {
         setEngineStatus('loading')
@@ -1206,8 +1204,18 @@ function App() {
           await context.resume()
         }
 
-        await Promise.all(uniquePads.map((pad) => loadPadBuffer(pad)))
+        // Load current bank first so the user can start playing immediately
+        await Promise.all(currentBankPads.map((pad) => loadPadBuffer(pad)))
         setEngineStatus('ready')
+
+        // Load remaining banks in the background
+        const remainingPads = bankIds
+          .filter((id) => id !== currentBankId)
+          .flatMap((id) => bankStates[id].pads)
+          .filter((pad) => !bufferMapRef.current.has(pad.sampleUrl))
+        for (const pad of remainingPads) {
+          loadPadBuffer(pad).catch(() => {})
+        }
       } catch (error) {
         console.error(error)
         bufferMapRef.current.clear()
