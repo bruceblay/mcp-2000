@@ -1,16 +1,14 @@
-import { Fragment, startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Circle, Dices, Download, Metronome, Piano, Play, Square } from 'lucide-react'
-import * as Slider from '@radix-ui/react-slider'
+import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Circle, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import JSZip from 'jszip'
-import { type BankKitId, type Pad, type PadSourceType } from './mock-kit'
-import { starterBankPads } from './kit-generation'
-import { SampleWaveform, type WaveformRegion } from './components/sample-waveform'
+import { type Pad } from './mock-kit'
+import { SampleWaveform } from './components/sample-waveform'
 import { getEffectDefaults, getEffectsList } from './effects'
 import {
   loopChopCount, midiStorageKey, midiSelectedInputStorageKey,
-  promptPresets, groupLabels, chromaticBaseOctave, chromaticMinOctave, chromaticMaxOctave,
-  chromaticKeyLayout, chromaticKeyboardMap, sequenceLengthOptions, sequenceLookaheadMs,
+  groupLabels, chromaticBaseOctave, chromaticMinOctave, chromaticMaxOctave,
+  chromaticKeyLayout, chromaticKeyboardMap, sequenceLookaheadMs,
   sequenceScheduleAheadSeconds, supportedGlobalEffectIds, arpDivisionOptions, arpModeOptions,
 } from './constants'
 import {
@@ -30,7 +28,7 @@ import {
   loadAudioDurationFromUrl, blobToBase64, getLfoWaveform,
   getPreferredRecordingMimeType, getRecordingFileExtension,
 } from './audio-utils'
-import { formatEffectParamValue, formatClockDuration, formatChopRegionLabel, formatSemitoneOffsetLabel, formatMidiNoteLabel } from './format-utils'
+import { formatClockDuration, formatChopRegionLabel, formatMidiNoteLabel } from './format-utils'
 import { getChromaticRelativeSemitone, getChromaticNoteLabel, buildChromaticNoteId } from './chromatic-utils'
 import {
   createInitialBankMixerGains, createInitialBankToggleState, getEffectiveBankGain,
@@ -59,7 +57,7 @@ function App() {
   const [promptText, setPromptText] = useState('')
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle')
   const [generationMode, setGenerationMode] = useState<GenerationMode>('kit')
-  const [generationMessage, setGenerationMessage] = useState('Generate a full 16-pad bank or a loop for chopping.')
+  const [_generationMessage, setGenerationMessage] = useState('Generate a full 16-pad bank or a loop for chopping.')
   const [micCaptureState, setMicCaptureState] = useState<MicCaptureState>('idle')
   const [micCaptureMessage, setMicCaptureMessage] = useState('Capture a raw take from your microphone, then load it into a pad or the editor.')
   const [recordedTake, setRecordedTake] = useState<RecordedTake | null>(null)
@@ -99,7 +97,7 @@ function App() {
   const [bankEffects, setBankEffects] = useState<Record<BankId, EffectChainState>>(() => createInitialBankEffects())
   const [masterEffect, setMasterEffect] = useState<EffectChainState>(() => createInitialEffectChain())
   const [midiAccessState, setMidiAccessState] = useState<'idle' | 'connecting' | 'ready' | 'error'>('idle')
-  const [midiStatusMessage, setMidiStatusMessage] = useState('Enable MIDI to map controller notes to the pad grid.')
+  const [_midiStatusMessage, setMidiStatusMessage] = useState('Enable MIDI to map controller notes to the pad grid.')
   const [availableMidiInputs, setAvailableMidiInputs] = useState<Array<{ id: string; name: string }>>([])
   const [selectedMidiInputId, setSelectedMidiInputId] = useState<string | null>(() => readStoredMidiInputId())
   const [midiLearnPadId, setMidiLearnPadId] = useState<string | null>(null)
@@ -188,12 +186,6 @@ function App() {
   const micRecordingSupported = typeof MediaRecorder !== 'undefined' && typeof navigator !== 'undefined' && Boolean(navigator.mediaDevices?.getUserMedia)
   const midiSupported = typeof navigator !== 'undefined' && typeof (navigator as NavigatorWithMidi).requestMIDIAccess === 'function'
   const isMidiEnabled = midiAccessState === 'ready'
-  const midiLearningPad = midiLearnPadId ? currentBankPads.find((pad) => pad.id === midiLearnPadId) ?? null : null
-  const midiPanelMessage = !midiSupported
-    ? 'Web MIDI is unavailable here. Use Chrome or another Chromium browser on localhost or https.'
-    : midiLearningPad
-      ? `Press a MIDI note now to map ${midiLearningPad.label}.`
-      : midiStatusMessage
   const micCaptureClockLabel = micCaptureState === 'recording'
     ? formatClockDuration(recordingElapsedMs / 1000)
     : recordedTake
@@ -4687,7 +4679,6 @@ function App() {
           promptText={promptText}
           generationStatus={generationStatus}
           generationMode={generationMode}
-          generationMessage={generationMessage}
           onPromptChange={setPromptText}
           onGenerateAudio={(mode) => { void generateAudio(mode) }}
         />

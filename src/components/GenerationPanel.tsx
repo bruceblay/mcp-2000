@@ -5,7 +5,6 @@ type GenerationPanelProps = {
   promptText: string
   generationStatus: GenerationStatus
   generationMode: GenerationMode
-  generationMessage: string
   onPromptChange: (value: string) => void
   onGenerateAudio: (mode: 'kit' | 'loop') => void
 }
@@ -14,7 +13,6 @@ export function GenerationPanel({
   promptText,
   generationStatus,
   generationMode,
-  generationMessage,
   onPromptChange,
   onGenerateAudio,
 }: GenerationPanelProps) {
