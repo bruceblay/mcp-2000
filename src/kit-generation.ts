@@ -4,6 +4,7 @@ export type PadChoice = {
   padId: string
   sampleFile: string
   sampleName: string
+  sampleUrl: string
   group: Pad['group']
   gain: number
 }
@@ -26,6 +27,7 @@ export const padCatalog = Object.fromEntries(
               padId: pad.id,
               sampleFile: pad.sampleFile,
               sampleName: pad.sampleName,
+              sampleUrl: pad.sampleUrl,
               group: pad.group,
               gain: pad.gain,
             } satisfies PadChoice,
@@ -67,7 +69,7 @@ export const materializeGeneratedKit = (selections: GeneratedKitSelection[]) =>
       ...templatePad,
       sampleFile: choice.sampleFile,
       sampleName: choice.sampleName,
-      sampleUrl: '/mock-samples/' + encodeURIComponent(choice.sampleFile),
+      sampleUrl: choice.sampleUrl,
       sourceType: 'generated' as const,
       durationLabel: 'Planned sample',
       gain: choice.gain,
