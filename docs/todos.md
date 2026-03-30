@@ -14,3 +14,8 @@
 - song mode?
 - sharable sequence link
 - how to store generated samples so other people can reference them?
+- library
+- some effects need work: bitcrusher, cd skipper, lofi tape
+- electron app?
+- sound feedback for playing sound on bank faders on mixer
+- 

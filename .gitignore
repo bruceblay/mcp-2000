@@ -4,6 +4,7 @@ dist
 
 public/generated
 .env.local
+gcp-service-account.json
 
 # OS files
 .DS_Store
@@ -13,3 +14,4 @@ public/generated
 
 # Playwright MCP
 .playwright-mcp/
+.vercel

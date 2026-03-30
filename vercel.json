@@ -5,6 +5,18 @@
     },
     "api/transform-sample.ts": {
       "maxDuration": 60
+    },
+    "api/share.ts": {
+      "maxDuration": 30
+    },
+    "api/cron/cleanup-shares.ts": {
+      "maxDuration": 60
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/cleanup-shares",
+      "schedule": "0 4 * * *"
+    }
+  ]
 }

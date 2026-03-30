@@ -1,5 +1,5 @@
-import { startTransition, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Circle, Download, Metronome, Piano, Play, Square } from 'lucide-react'
+import { startTransition, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { ChevronLeft, ChevronRight, Circle, Download, Link, Metronome, Piano, Play, Share2, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import JSZip from 'jszip'
 import { type Pad } from './mock-kit'
@@ -38,6 +38,11 @@ import {
   readStoredMidiPadMappings, readStoredMidiInputId,
 } from './state-init'
 import { createGlobalEffectRouting } from './effects-routing'
+import {
+  serializeProject, deserializeProject,
+  type ProjectSnapshot, type DeserializedProject,
+} from './project-snapshot'
+import { useShare, type ShareStatus } from './use-share'
 import { EffectsWorkspace } from './components/EffectsWorkspace'
 import { MixerWorkspace } from './components/MixerWorkspace'
 import { SequenceWorkspace } from './components/SequenceWorkspace'
@@ -1572,6 +1577,79 @@ function App() {
       }
     }
   }
+
+  // -----------------------------------------------------------------------
+  // Project snapshot — serialize / restore
+  // -----------------------------------------------------------------------
+
+  const getSnapshot = (): ProjectSnapshot =>
+    serializeProject({
+      activeBankId: currentBankId,
+      bankStates,
+      bankMixerGains,
+      bankMixerMuted,
+      bankMixerSoloed,
+      masterOutputGain,
+      bankEffects,
+      masterEffect,
+      sequenceTempo,
+      isChromaticModeActive,
+      chromaticOctave,
+      isArpEnabled,
+      isArpLatched,
+      arpDivision,
+      arpMode,
+      isDarkMode,
+    })
+
+  const applySnapshot = (project: DeserializedProject) => {
+    setCurrentBankId(project.activeBankId)
+    setBankStates(project.bankStates)
+    setBankMixerGains(project.bankMixerGains)
+    setBankMixerMuted(project.bankMixerMuted)
+    setBankMixerSoloed(project.bankMixerSoloed)
+    setMasterOutputGain(project.masterOutputGain)
+    setBankEffects(project.bankEffects)
+    setMasterEffect(project.masterEffect)
+    setSequenceTempo(project.sequenceTempo)
+    setIsChromaticModeActive(project.isChromaticModeActive)
+    setChromaticOctave(project.chromaticOctave)
+    setIsArpEnabled(project.isArpEnabled)
+    setIsArpLatched(project.isArpLatched)
+    setArpDivision(project.arpDivision)
+    setArpMode(project.arpMode)
+    setIsDarkMode(project.isDarkMode)
+  }
+
+  const getSerializeInput = useCallback(() => ({
+    activeBankId: currentBankId,
+    bankStates,
+    bankMixerGains,
+    bankMixerMuted,
+    bankMixerSoloed,
+    masterOutputGain,
+    bankEffects,
+    masterEffect,
+    sequenceTempo,
+    isChromaticModeActive,
+    chromaticOctave,
+    isArpEnabled,
+    isArpLatched,
+    arpDivision,
+    arpMode,
+    isDarkMode,
+  }), [
+    currentBankId, bankStates, bankMixerGains, bankMixerMuted, bankMixerSoloed,
+    masterOutputGain, bankEffects, masterEffect, sequenceTempo,
+    isChromaticModeActive, chromaticOctave, isArpEnabled, isArpLatched,
+    arpDivision, arpMode, isDarkMode,
+  ])
+
+  const {
+    shareStatus, shareUrl, shareError,
+    isLoadingShare, loadedFromShare,
+    startShare, dismissShare,
+  } = useShare(getSerializeInput, applySnapshot)
 
   const [isExportingKit, setIsExportingKit] = useState(false)
 
@@ -4009,20 +4087,40 @@ function App() {
 
   return (
     <main className="app-shell">
+      {isLoadingShare && (
+        <div className="share-loading-overlay">Loading shared project…</div>
+      )}
       <header className="work-area" aria-label="Sampler work area">
         <div className="work-area-toolbar">
           <div className="work-area-title">
             <div className="work-area-title-row">
               <p className="eyebrow">MCP 2000xl</p>
-              <button
-                type="button"
-                className="theme-toggle"
-                onClick={() => setIsDarkMode((c) => !c)}
-                aria-label={isDarkMode ? 'Switch to beige' : 'Switch to blue'}
-                title={isDarkMode ? 'Beige' : 'Blue'}
-              >
-                {isDarkMode ? 'Beige' : 'Blue'}
-              </button>
+              <div className="title-row-actions">
+                <button
+                  type="button"
+                  className="theme-toggle"
+                  onClick={() => setIsDarkMode((c) => !c)}
+                  aria-label={isDarkMode ? 'Switch to beige' : 'Switch to blue'}
+                  title={isDarkMode ? 'Beige' : 'Blue'}
+                >
+                  {isDarkMode ? 'Beige' : 'Blue'}
+                </button>
+                <button
+                  type="button"
+                  className={shareStatus === 'done' ? 'share-button is-done' : 'share-button'}
+                  onClick={shareStatus === 'done' ? dismissShare : startShare}
+                  disabled={shareStatus === 'uploading' || shareStatus === 'creating'}
+                  aria-label={shareStatus === 'done' ? 'Share link copied' : 'Share project'}
+                  title={shareStatus === 'done' ? 'Link copied!' : 'Share'}
+                >
+                  {shareStatus === 'done' ? <Link size={14} /> : <Share2 size={14} />}
+                  {shareStatus === 'idle' && 'Share'}
+                  {shareStatus === 'uploading' && 'Uploading…'}
+                  {shareStatus === 'creating' && 'Creating…'}
+                  {shareStatus === 'done' && 'Copied!'}
+                  {shareStatus === 'error' && 'Failed'}
+                </button>
+              </div>
             </div>
             <strong>{workViewTitle}</strong>
           </div>
