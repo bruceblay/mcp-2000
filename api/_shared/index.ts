@@ -1,11 +1,45 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { generateText, tool } from 'ai'
-import { bankKits, type Pad } from '../../src/mock-kit'
 import { z } from 'zod'
 
-// --- Template data ---
+// --- Types (mirrored from src/mock-kit.ts to avoid cross-boundary imports) ---
 
-export const allTemplatePads = bankKits.A
+type PadGroup = 'drums' | 'textures' | 'melodic' | 'fx' | 'chop'
+type PadSourceType = 'generated' | 'uploaded' | 'resampled'
+
+export type Pad = {
+  id: string
+  label: string
+  keyTrigger: string
+  group: PadGroup
+  sampleName: string
+  sampleFile: string
+  sampleUrl: string
+  sourceType: PadSourceType
+  durationLabel: string
+  gain: number
+}
+
+// --- Template data (Bank A pad layout used for generation planning) ---
+
+export const allTemplatePads: Pad[] = [
+  { id: 'pad-1', label: 'Kick 01', keyTrigger: '1', group: 'drums', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 1.0 },
+  { id: 'pad-2', label: 'Snare 02', keyTrigger: '2', group: 'drums', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.92 },
+  { id: 'pad-3', label: 'Hat 03', keyTrigger: '3', group: 'drums', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.68 },
+  { id: 'pad-4', label: 'Open Hat 04', keyTrigger: '4', group: 'drums', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.7 },
+  { id: 'pad-5', label: 'Clap 05', keyTrigger: 'Q', group: 'textures', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.82 },
+  { id: 'pad-6', label: 'Perc 06', keyTrigger: 'W', group: 'textures', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.72 },
+  { id: 'pad-7', label: 'Cowbell 07', keyTrigger: 'E', group: 'textures', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.72 },
+  { id: 'pad-8', label: 'Metal FX 08', keyTrigger: 'R', group: 'fx', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.65 },
+  { id: 'pad-9', label: 'Tom 09', keyTrigger: 'A', group: 'melodic', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.86 },
+  { id: 'pad-10', label: 'Mid Tom 10', keyTrigger: 'S', group: 'melodic', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.82 },
+  { id: 'pad-11', label: 'Rim 11', keyTrigger: 'D', group: 'melodic', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.7 },
+  { id: 'pad-12', label: 'Ride 12', keyTrigger: 'F', group: 'melodic', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.74 },
+  { id: 'pad-13', label: 'Crash 13', keyTrigger: 'Z', group: 'fx', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.7 },
+  { id: 'pad-14', label: 'Blip 14', keyTrigger: 'X', group: 'fx', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.68 },
+  { id: 'pad-15', label: 'Shaker 15', keyTrigger: 'C', group: 'fx', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.72 },
+  { id: 'pad-16', label: 'Ride FX 16', keyTrigger: 'V', group: 'fx', sampleName: '', sampleFile: '', sampleUrl: '', sourceType: 'uploaded', durationLabel: '', gain: 0.64 },
+]
 const allPadIds = allTemplatePads.map((pad) => pad.id) as [string, ...string[]]
 
 // --- Schemas ---
