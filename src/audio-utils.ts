@@ -282,6 +282,11 @@ export const loadAudioDurationFromUrl = async (audioUrl: string) =>
     audio.addEventListener('error', handleError)
   })
 
+export const base64ToBlob = (base64: string, mimeType = 'audio/mpeg') => {
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
+  return new Blob([bytes], { type: mimeType })
+}
+
 export const blobToBase64 = async (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader()

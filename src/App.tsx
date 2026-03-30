@@ -25,7 +25,7 @@ import {
   getPadPlaybackWindow, encodeWavBlob, sanitizeDownloadName, triggerBlobDownload,
   getSubdivisionSeconds, getLoopChopRate, getEffectTailPaddingSeconds,
   getLoopDurationSeconds, buildChopRegions, normalizeChopRegions,
-  loadAudioDurationFromUrl, blobToBase64, getLfoWaveform,
+  loadAudioDurationFromUrl, base64ToBlob, blobToBase64, getLfoWaveform,
   getPreferredRecordingMimeType, getRecordingFileExtension,
 } from './audio-utils'
 import { formatClockDuration, formatChopRegionLabel, formatMidiNoteLabel } from './format-utils'
@@ -446,6 +446,22 @@ function App() {
         } catch {}
         activeLoopPlaybackRef.current = null
       }
+    }
+  }, [])
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {})
+      }
+    }
+    document.addEventListener('touchstart', unlockAudio, { once: false })
+    document.addEventListener('touchend', unlockAudio, { once: false })
+    document.addEventListener('click', unlockAudio, { once: false })
+    return () => {
+      document.removeEventListener('touchstart', unlockAudio)
+      document.removeEventListener('touchend', unlockAudio)
+      document.removeEventListener('click', unlockAudio)
     }
   }, [])
 
@@ -1136,6 +1152,10 @@ function App() {
 
     if (loadPromiseRef.current) {
       await loadPromiseRef.current
+      const context = audioContextRef.current
+      if (context && context.state === 'suspended') {
+        await context.resume()
+      }
       return
     }
 
@@ -1623,7 +1643,7 @@ function App() {
       const payload = (await response.json()) as {
         error?: string
         summary?: string
-        transformedSample?: EditorTransformResponse['transformedSample']
+        transformedSample?: EditorTransformResponse['transformedSample'] & { audioBase64?: string }
       }
 
       if (!response.ok || !payload.transformedSample) {
@@ -1631,6 +1651,11 @@ function App() {
       }
 
       const transformedSample = payload.transformedSample
+
+      if (transformedSample.audioBase64) {
+        transformedSample.sampleUrl = createEphemeralAudioUrl(base64ToBlob(transformedSample.audioBase64))
+        transformedSample.audioBase64 = undefined
+      }
 
       if (editorSource === 'loop' && generatedLoop) {
         const durationSeconds = Math.max(0.01, await loadAudioDurationFromUrl(transformedSample.sampleUrl))
@@ -3426,15 +3451,28 @@ function App() {
       const payload = (await response.json()) as {
         error?: string
         summary?: string
-        generatedPads?: Pad[]
-        generatedLoop?: GeneratedLoop
+        generatedPads?: (Pad & { audioBase64?: string })[]
+        generatedLoop?: GeneratedLoop & { audioBase64?: string }
       }
 
       if (!response.ok) {
         throw new Error(payload.error || 'Generation failed.')
       }
 
+      if (payload.generatedPads) {
+        for (const pad of payload.generatedPads) {
+          if (pad.audioBase64) {
+            pad.sampleUrl = createEphemeralAudioUrl(base64ToBlob(pad.audioBase64))
+            pad.audioBase64 = undefined
+          }
+        }
+      }
+
       if (payload.generatedLoop) {
+        if (payload.generatedLoop.audioBase64) {
+          payload.generatedLoop.sampleUrl = createEphemeralAudioUrl(base64ToBlob(payload.generatedLoop.audioBase64))
+          payload.generatedLoop.audioBase64 = undefined
+        }
         stopLoopPlayback()
         setGeneratedLoop(payload.generatedLoop)
         setEditorSource('loop')

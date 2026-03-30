@@ -1,85 +1,7 @@
-import { createAnthropic } from '@ai-sdk/anthropic'
-import { generateText, tool } from 'ai'
-import { mkdir, writeFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { join } from 'node:path'
-import { bankKits, type Pad } from './src/mock-kit'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { z } from 'zod'
-
-const sequencePadContextSchema = z.object({
-  padId: z.string(),
-  label: z.string(),
-  sampleName: z.string(),
-  group: z.string(),
-})
-
-const requestSchema = z.object({
-  prompt: z.string().min(1),
-  bankId: z.enum(['A', 'B', 'C', 'D']).optional(),
-  mode: z.enum(['kit', 'pad', 'loop', 'sequence', 'random-sequence']).default('kit'),
-  selectedPadId: z.string().optional(),
-  sequenceLength: z.number().int().min(8).max(32).optional(),
-  sequencePads: z.array(sequencePadContextSchema).length(16).optional(),
-})
-
-const transformSampleSchema = z.object({
-  prompt: z.string().min(20).max(320),
-  sampleName: z.string().min(1).max(64),
-  sampleFile: z.string().min(1).max(160),
-  editorSource: z.enum(['pad', 'loop']),
-  audioBase64: z.string().min(1),
-  mimeType: z.string().min(1).max(120).optional(),
-})
-
-const allTemplatePads = bankKits.A
-const allPadIds = allTemplatePads.map((pad) => pad.id) as [string, ...string[]]
-
-const kitPlanItemSchema = z.object({
-  padId: z.enum(allPadIds),
-  sampleName: z.string().min(1).max(48),
-  prompt: z.string().min(1).max(260),
-  durationSeconds: z.number().min(0.5).max(8),
-  promptInfluence: z.number().min(0).max(1),
-})
-
-const kitPlanSchema = z.object({
-  summary: z.string(),
-  samples: z.array(kitPlanItemSchema).length(16),
-})
-
-const singlePadPlanSchema = z.object({
-  summary: z.string(),
-  sample: z.object({
-    padId: z.string(),
-    sampleName: z.string().min(1).max(48),
-    prompt: z.string().min(1).max(260),
-    durationSeconds: z.number().min(0.5).max(8),
-    promptInfluence: z.number().min(0).max(1),
-  }),
-})
-
-const loopPlanSchema = z.object({
-  summary: z.string(),
-  loop: z.object({
-    sampleName: z.string().min(1).max(56),
-    prompt: z.string().min(1).max(320),
-    durationSeconds: z.number().min(3).max(30),
-    promptInfluence: z.number().min(0).max(1),
-    bpm: z.number().int().min(60).max(180),
-  }),
-})
-
-const sequenceLaneSchema = z.object({
-  padId: z.string(),
-  activeSteps: z.array(z.number().int().min(1).max(32)).max(32),
-})
-
-const sequencePlanSchema = z.object({
-  summary: z.string(),
-  lanes: z.array(sequenceLaneSchema).length(16),
-})
+import { requestSchema, transformSampleSchema, executeGenerateKit, executeTransformSample } from './api/_shared'
 
 const readJsonBody = async (req: IncomingMessage) => {
   const chunks: Uint8Array[] = []
@@ -97,271 +19,8 @@ const sendJson = (res: ServerResponse, status: number, payload: unknown) => {
   res.end(JSON.stringify(payload))
 }
 
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 32) || 'sample'
-
-const buildKitPlannerPrompt = (userPrompt: string) =>
-  [
-    'User prompt: ' + userPrompt,
-    'Create fresh audio generation prompts for all 16 pads in this MPC-style bank:',
-    allTemplatePads.map((pad) => '- ' + pad.id + ' | ' + pad.label + ' | group: ' + pad.group).join('\n'),
-    'Drum and FX pads should usually be one-shots.',
-    'Texture and melodic pads can be short phrases, stabs, tonal hits, ambiences, or sample fragments.',
-    'Return distinctive sample names with personality. Do not reuse generic pad role names like Kick 01 or Snare 02 as the sampleName.',
-    'Keep the full kit stylistically coherent around the user prompt while giving each pad a clear role.',
-  ].join('\n\n')
-
-const buildSinglePadPlannerPrompt = (userPrompt: string, pad: Pad) =>
-  [
-    'User prompt: ' + userPrompt,
-    'Create one fresh audio generation prompt for this exact pad role:',
-    '- ' + pad.id + ' | ' + pad.label + ' | group: ' + pad.group,
-    'Return a one-shot if the pad is a drum or fx hit.',
-    'Return a short sample fragment if the pad is melodic or texture based.',
-    'Return a distinctive short sampleName with personality. Do not just repeat the pad label.',
-    'The result should be bold and specific, not generic or neutral.',
-  ].join('\n\n')
-
-const buildLoopPlannerPrompt = (userPrompt: string) =>
-  [
-    'User prompt: ' + userPrompt,
-    'Create one looping sample generation prompt for an MPC-inspired chop source.',
-    'The result should be a cohesive loop, not a single hit.',
-    'Favor loops that are rich enough to chop into multiple slices.',
-    'Return a descriptive sampleName, a BPM, and a duration between 4 and 16 seconds unless the prompt strongly implies something else.',
-  ].join('\n\n')
-
-const buildSequencePlannerPrompt = (userPrompt: string, sequenceLength: number, pads: Array<{ padId: string; label: string; sampleName: string; group: string }>) =>
-  [
-    'User prompt: ' + userPrompt,
-    'Create a playable step sequence for this MPC-style bank.',
-    'Sequence length: ' + sequenceLength + ' steps.',
-    'Use the pad labels and sample names as the musical context. Respect what each sound seems to be.',
-    pads.map((pad) => '- ' + pad.padId + ' | ' + pad.label + ' | sample: ' + pad.sampleName + ' | group: ' + pad.group).join('\n'),
-    'Return active step numbers using 1-based indexing.',
-    'Favor musical patterns with space, repetition, and variation. Do not fill every lane.',
-    'Usually keep kick, snare, hats, perc, melodic, and fx roles sensible to their names.',
-  ].join('\n\n')
-
-const buildRandomSequencePlannerPrompt = (userPrompt: string, sequenceLength: number, pads: Array<{ padId: string; label: string; sampleName: string; group: string }>) =>
-  [
-    'Optional vibe hint from user: ' + userPrompt,
-    'Create a genuinely surprising but still playable step sequence for this MPC-style bank.',
-    'Sequence length: ' + sequenceLength + ' steps.',
-    'Use the pad labels and sample names as loose musical context, but do not fall back to the same stock groove every time.',
-    pads.map((pad) => '- ' + pad.padId + ' | ' + pad.label + ' | sample: ' + pad.sampleName + ' | group: ' + pad.group).join('\n'),
-    'Return active step numbers using 1-based indexing.',
-    'Prioritize novelty, asymmetry, syncopation, dropouts, and unexpected combinations that still suit the sounds.',
-    'Treat the user hint as optional inspiration rather than a strict recipe.',
-    'Leave plenty of space where appropriate. Random should feel fresh, not overcrowded.',
-  ].join('\n\n')
-
-const generateElevenLabsSample = async (
-  apiKey: string,
-  planItem: { prompt: string; durationSeconds: number; promptInfluence: number; loop?: boolean },
-) => {
-  const response = await fetch('https://api.elevenlabs.io/v1/sound-generation', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'xi-api-key': apiKey,
-      Accept: 'audio/mpeg',
-    },
-    body: JSON.stringify({
-      text: planItem.prompt,
-      duration_seconds: planItem.durationSeconds,
-      prompt_influence: planItem.promptInfluence,
-      loop: planItem.loop ?? false,
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error('ElevenLabs sound generation failed: ' + errorText)
-  }
-
-  return Buffer.from(await response.arrayBuffer())
-}
-
-const createPromptDesignedVoice = async (
-  apiKey: string,
-  prompt: string,
-  sampleName: string,
-  referenceAudioBase64: string,
-) => {
-  const designResponse = await fetch('https://api.elevenlabs.io/v1/text-to-voice/design', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'xi-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      voice_description: prompt,
-      model_id: 'eleven_ttv_v3',
-      auto_generate_text: true,
-      reference_audio_base64: referenceAudioBase64,
-      prompt_strength: 0.82,
-    }),
-  })
-
-  if (!designResponse.ok) {
-    const errorText = await designResponse.text()
-    throw new Error('ElevenLabs voice design failed: ' + errorText)
-  }
-
-  const designPayload = await designResponse.json() as {
-    previews?: Array<{
-      generated_voice_id?: string
-    }>
-  }
-  const generatedVoiceId = designPayload.previews?.[0]?.generated_voice_id
-
-  if (!generatedVoiceId) {
-    throw new Error('ElevenLabs voice design did not return a generated voice.')
-  }
-
-  const createResponse = await fetch('https://api.elevenlabs.io/v1/text-to-voice', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'xi-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      voice_name: `Sampler ${slugify(sampleName)} ${Date.now()}`,
-      voice_description: prompt,
-      generated_voice_id: generatedVoiceId,
-    }),
-  })
-
-  if (!createResponse.ok) {
-    const errorText = await createResponse.text()
-    throw new Error('ElevenLabs voice creation failed: ' + errorText)
-  }
-
-  const createPayload = await createResponse.json() as { voice_id?: string }
-
-  if (!createPayload.voice_id) {
-    throw new Error('ElevenLabs voice creation did not return a voice id.')
-  }
-
-  return createPayload.voice_id
-}
-
-const deleteDesignedVoice = async (apiKey: string, voiceId: string) => {
-  try {
-    await fetch(`https://api.elevenlabs.io/v1/voices/${voiceId}`, {
-      method: 'DELETE',
-      headers: {
-        'xi-api-key': apiKey,
-      },
-    })
-  } catch {}
-}
-
-const transformEditorSample = async (
-  apiKey: string,
-  options: {
-    prompt: string
-    sampleName: string
-    sampleFile: string
-    audioBase64: string
-    mimeType?: string
-  },
-) => {
-  const voiceId = await createPromptDesignedVoice(apiKey, options.prompt, options.sampleName, options.audioBase64)
-
-  try {
-    const sampleBuffer = Buffer.from(options.audioBase64, 'base64')
-    const formData = new FormData()
-
-    formData.set('audio', new Blob([sampleBuffer], { type: options.mimeType || 'audio/wav' }), options.sampleFile)
-    formData.set('model_id', 'eleven_english_sts_v2')
-    formData.set('remove_background_noise', 'true')
-
-    const response = await fetch(`https://api.elevenlabs.io/v1/speech-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        Accept: 'audio/mpeg',
-      },
-      body: formData,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error('ElevenLabs speech transformation failed: ' + errorText)
-    }
-
-    return Buffer.from(await response.arrayBuffer())
-  } finally {
-    await deleteDesignedVoice(apiKey, voiceId)
-  }
-}
-
-async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item: T) => Promise<R>) {
-  const results: R[] = []
-
-  for (let index = 0; index < items.length; index += limit) {
-    const batch = items.slice(index, index + limit)
-    const batchResults = await Promise.all(batch.map((item) => mapper(item)))
-    results.push(...batchResults)
-  }
-
-  return results
-}
-
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const anthropic = createAnthropic({
-    apiKey: env.ANTHROPIC_API_KEY,
-  })
-
-  const generateOneSampleFromPlan = async (
-    generatedDir: string,
-    templatePad: Pad,
-    samplePlan: { sampleName: string; prompt: string; durationSeconds: number; promptInfluence: number },
-  ) => {
-    const audioBuffer = await generateElevenLabsSample(env.ELEVENLABS_API_KEY, samplePlan)
-    const fileName = Date.now() + '-' + templatePad.id + '-' + slugify(samplePlan.sampleName) + '.mp3'
-    await writeFile(join(generatedDir, fileName), audioBuffer)
-
-    return {
-      ...templatePad,
-      sampleName: samplePlan.sampleName,
-      sampleFile: fileName,
-      sampleUrl: '/generated/' + encodeURIComponent(fileName),
-      sourceType: 'generated' as const,
-      durationLabel: samplePlan.durationSeconds.toFixed(1) + 's generated',
-    } satisfies Pad
-  }
-
-  const generateLoopFromPlan = async (
-    generatedDir: string,
-    loopPlan: { sampleName: string; prompt: string; durationSeconds: number; promptInfluence: number; bpm: number },
-  ) => {
-    const audioBuffer = await generateElevenLabsSample(env.ELEVENLABS_API_KEY, {
-      prompt: loopPlan.prompt,
-      durationSeconds: loopPlan.durationSeconds,
-      promptInfluence: loopPlan.promptInfluence,
-      loop: true,
-    })
-    const fileName = Date.now() + '-loop-' + slugify(loopPlan.sampleName) + '.mp3'
-    await writeFile(join(generatedDir, fileName), audioBuffer)
-
-    return {
-      sampleName: loopPlan.sampleName,
-      sampleFile: fileName,
-      sampleUrl: '/generated/' + encodeURIComponent(fileName),
-      durationLabel: loopPlan.durationSeconds.toFixed(1) + 's loop',
-      durationSeconds: loopPlan.durationSeconds,
-      bpm: loopPlan.bpm,
-      sourceType: 'generated' as const,
-    }
-  }
 
   const generateKitHandler = async (
     req: IncomingMessage,
@@ -385,200 +44,34 @@ export default defineConfig(({ mode }) => {
 
     try {
       const parsedRequest = requestSchema.parse(await readJsonBody(req))
-      const generatedDir = join(process.cwd(), 'public', 'generated')
-      await mkdir(generatedDir, { recursive: true })
+      const result = await executeGenerateKit(
+        env.ANTHROPIC_API_KEY,
+        env.ELEVENLABS_API_KEY || '',
+        parsedRequest,
+      )
 
-      if (parsedRequest.mode === 'sequence' || parsedRequest.mode === 'random-sequence') {
-        const sequenceLength = parsedRequest.sequenceLength
-        const sequencePads = parsedRequest.sequencePads
-        const isRandomSequence = parsedRequest.mode === 'random-sequence'
-
-        if (!sequenceLength || !sequencePads) {
-          sendJson(res, 400, { error: 'Sequence generation needs the current bank pads and sequence length.' })
-          return
-        }
-
-        const sequenceResult = await generateText({
-          model: anthropic('claude-sonnet-4-5'),
-          temperature: isRandomSequence ? 1 : 0.8,
-          toolChoice: { type: 'tool', toolName: 'submitSequencePlan' },
-          system: [
-            isRandomSequence
-              ? 'You are designing a musically useful but genuinely surprising step pattern for an MPC-inspired sampler.'
-              : 'You are designing a musically useful step pattern for an MPC-inspired sampler.',
-            isRandomSequence
-              ? 'Use the provided pad names and sample names as loose musical anchors, but avoid defaulting to the same obvious groove.'
-              : 'Use the provided pad names and sample names to infer roles and build a coherent sequence.',
-            'Return one lane for every pad, but leave many lanes empty when appropriate.',
-            isRandomSequence
-              ? 'Favor asymmetry, syncopation, surprise, and variation while keeping the result playable.'
-              : 'Favor musical patterns with space, repetition, and sensible roles.',
-            'You must call submitSequencePlan exactly once.',
-          ].join(' '),
-          prompt: isRandomSequence
-            ? buildRandomSequencePlannerPrompt(parsedRequest.prompt, sequenceLength, sequencePads)
-            : buildSequencePlannerPrompt(parsedRequest.prompt, sequenceLength, sequencePads),
-          tools: {
-            submitSequencePlan: tool({
-              description: 'Submit a step sequence plan for the current bank.',
-              inputSchema: sequencePlanSchema,
-              execute: async (input) => input,
-            }),
-          },
-        })
-
-        const toolResult = sequenceResult.toolResults.find((entry) => entry.toolName === 'submitSequencePlan')
-        if (!toolResult || toolResult.type !== 'tool-result') {
-          sendJson(res, 500, { error: 'Sequence planner did not return a valid pattern.' })
-          return
-        }
-
-        const output = sequencePlanSchema.parse(toolResult.output)
+      if (result.type === 'sequence') {
         sendJson(res, 200, {
-          bankId: parsedRequest.bankId,
-          summary: output.summary,
-          generatedSequence: output,
+          bankId: result.bankId,
+          summary: result.summary,
+          generatedSequence: result.generatedSequence,
         })
         return
       }
 
-      if (parsedRequest.mode === 'loop') {
-        if (!env.ELEVENLABS_API_KEY) {
-          sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before generating real samples.' })
-          return
-        }
-        const loopResult = await generateText({
-          model: anthropic('claude-sonnet-4-5'),
-          temperature: 0.85,
-          toolChoice: { type: 'tool', toolName: 'submitLoopPlan' },
-          system: [
-            'You are designing a loop for an MPC-inspired sampler workflow.',
-            'Return one cohesive loop plan that will be good for chopping into pads.',
-            'The loop should be stylistically committed and sampleable, not generic background filler.',
-            'You must call submitLoopPlan exactly once.',
-          ].join(' '),
-          prompt: buildLoopPlannerPrompt(parsedRequest.prompt),
-          tools: {
-            submitLoopPlan: tool({
-              description: 'Submit one loop-generation plan for a chop-ready sample.',
-              inputSchema: loopPlanSchema,
-              execute: async (input) => input,
-            }),
-          },
-        })
-
-        const toolResult = loopResult.toolResults.find((entry) => entry.toolName === 'submitLoopPlan')
-        if (!toolResult || toolResult.type !== 'tool-result') {
-          sendJson(res, 500, { error: 'Loop planner did not return a valid generation plan.' })
-          return
-        }
-
-        const output = loopPlanSchema.parse(toolResult.output)
-        const generatedLoop = await generateLoopFromPlan(generatedDir, output.loop)
-
+      if (result.type === 'loop') {
         sendJson(res, 200, {
-          bankId: parsedRequest.bankId,
-          summary: output.summary,
-          generatedLoop,
+          bankId: result.bankId,
+          summary: result.summary,
+          generatedLoop: result.generatedLoop,
         })
         return
       }
-
-      if (parsedRequest.mode === 'pad') {
-        if (!env.ELEVENLABS_API_KEY) {
-          sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before generating real samples.' })
-          return
-        }
-        const templatePad = allTemplatePads.find((pad) => pad.id === parsedRequest.selectedPadId)
-        if (!templatePad) {
-          sendJson(res, 400, { error: 'Select a pad before generating a single sample.' })
-          return
-        }
-
-        const padResult = await generateText({
-          model: anthropic('claude-sonnet-4-5'),
-          temperature: 0.9,
-          toolChoice: { type: 'tool', toolName: 'submitSinglePadPlan' },
-          system: [
-            'You are designing one sampler sound for an MPC-inspired web app.',
-            'Make the result stylistically committed and immediately usable.',
-            'Return a concise prompt for sound generation plus duration guidance.',
-            'Return a descriptive sampleName, not the raw pad label.',
-            'You must call submitSinglePadPlan exactly once.',
-          ].join(' '),
-          prompt: buildSinglePadPlannerPrompt(parsedRequest.prompt, templatePad),
-          tools: {
-            submitSinglePadPlan: tool({
-              description: 'Submit a generation plan for the selected pad.',
-              inputSchema: singlePadPlanSchema,
-              execute: async (input) => input,
-            }),
-          },
-        })
-
-        const toolResult = padResult.toolResults.find((entry) => entry.toolName === 'submitSinglePadPlan')
-        if (!toolResult || toolResult.type !== 'tool-result') {
-          sendJson(res, 500, { error: 'Pad planner did not return a valid generation plan.' })
-          return
-        }
-
-        const output = singlePadPlanSchema.parse(toolResult.output)
-        const generatedPad = await generateOneSampleFromPlan(generatedDir, templatePad, output.sample)
-
-        sendJson(res, 200, {
-          bankId: parsedRequest.bankId,
-          summary: output.summary,
-          generatedPads: [generatedPad],
-        })
-        return
-      }
-
-      if (!env.ELEVENLABS_API_KEY) {
-        sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before generating real samples.' })
-        return
-      }
-
-      const planResult = await generateText({
-        model: anthropic('claude-sonnet-4-5'),
-        temperature: 0.85,
-        toolChoice: { type: 'tool', toolName: 'submitKitPlan' },
-        system: [
-          'You are designing a full 16-pad sampler bank for an MPC-inspired web app.',
-          'Return one generation plan for every pad role in the bank.',
-          'The bank should feel coherent and inspired by the user prompt, but the individual pads should still have variety and personality.',
-          'Return descriptive sample names, not generic role labels.',
-          'You must call submitKitPlan exactly once.',
-        ].join(' '),
-        prompt: buildKitPlannerPrompt(parsedRequest.prompt),
-        tools: {
-          submitKitPlan: tool({
-            description: 'Submit the 16-pad generation plan for the full bank.',
-            inputSchema: kitPlanSchema,
-            execute: async (input) => input,
-          }),
-        },
-      })
-
-      const toolResult = planResult.toolResults.find((entry) => entry.toolName === 'submitKitPlan')
-      if (!toolResult || toolResult.type !== 'tool-result') {
-        sendJson(res, 500, { error: 'Kit planner did not return a valid generation plan.' })
-        return
-      }
-
-      const output = kitPlanSchema.parse(toolResult.output)
-      const generatedPads = await mapWithConcurrency(output.samples, 4, async (samplePlan) => {
-        const templatePad = allTemplatePads.find((pad) => pad.id === samplePlan.padId)
-        if (!templatePad) {
-          throw new Error('Missing pad template for ' + samplePlan.padId)
-        }
-
-        return generateOneSampleFromPlan(generatedDir, templatePad, samplePlan)
-      })
 
       sendJson(res, 200, {
-        bankId: parsedRequest.bankId,
-        summary: output.summary,
-        generatedPads,
+        bankId: result.bankId,
+        summary: result.summary,
+        generatedPads: result.generatedPads,
       })
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unexpected generation error.'
@@ -608,31 +101,19 @@ export default defineConfig(({ mode }) => {
 
     try {
       const parsedRequest = transformSampleSchema.parse(await readJsonBody(req))
-      const generatedDir = join(process.cwd(), 'public', 'generated')
-      await mkdir(generatedDir, { recursive: true })
-
-      const transformedAudio = await transformEditorSample(env.ELEVENLABS_API_KEY, {
-        prompt: parsedRequest.prompt,
-        sampleName: parsedRequest.sampleName,
-        sampleFile: parsedRequest.sampleFile,
-        audioBase64: parsedRequest.audioBase64,
-        mimeType: parsedRequest.mimeType,
-      })
-
-      const fileName = `${Date.now()}-${slugify(parsedRequest.sampleName)}-elevenlabs.mp3`
-      await writeFile(join(generatedDir, fileName), transformedAudio)
+      const result = await executeTransformSample(env.ELEVENLABS_API_KEY, parsedRequest)
 
       sendJson(res, 200, {
-        summary: `Loaded an ElevenLabs-transformed ${parsedRequest.editorSource === 'loop' ? 'loop' : 'sample'} from your prompt.`,
+        summary: result.summary,
         transformedSample: {
-          sampleName: `${parsedRequest.sampleName} EL`,
-          sampleFile: fileName,
-          sampleUrl: '/generated/' + encodeURIComponent(fileName),
-          sourceType: 'resampled' as const,
+          sampleName: result.sampleName,
+          sampleFile: result.sampleFile,
+          sourceType: result.sourceType,
+          audioBase64: result.audioBase64,
         },
       })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unexpected ElevenLabs transform error.'
+      const message = error instanceof Error ? error.message : 'Unexpected transform error.'
       sendJson(res, 500, { error: message })
     }
   }

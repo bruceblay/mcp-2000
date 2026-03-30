@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/generate-kit.ts": {
+      "maxDuration": 60
+    },
+    "api/transform-sample.ts": {
+      "maxDuration": 60
+    }
+  }
+}
