@@ -1091,6 +1091,10 @@ function App() {
       masterGainRef.current = masterGain
     }
 
+    if (audioContextRef.current.state === 'suspended') {
+      void audioContextRef.current.resume()
+    }
+
     return audioContextRef.current
   }
 
