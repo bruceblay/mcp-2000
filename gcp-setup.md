@@ -18,6 +18,12 @@ gcloud projects add-iam-policy-binding mcp-2000 --member=serviceAccount:mcp-2000
 gcloud iam service-accounts keys create ./gcp-service-account.json --iam-account=mcp-2000-share@mcp-2000.iam.gserviceaccount.com
 ```
 
+## Firestore Composite Index
+
+```
+gcloud firestore indexes composite create --collection-group=shared_projects --field-config=field-path=creatorIp,order=ascending --field-config=field-path=createdAt,order=ascending
+```
+
 ## Vercel Environment Variables
 
 ```

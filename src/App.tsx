@@ -4088,7 +4088,12 @@ function App() {
   return (
     <main className="app-shell">
       {isLoadingShare && (
-        <div className="share-loading-overlay">Loading shared project…</div>
+        <div className="share-loading-overlay">
+          <div className="share-loading-lcd">
+            <p className="share-loading-eyebrow">MCP 2000xl</p>
+            <p className="share-loading-label">Loading shared project…</p>
+          </div>
+        </div>
       )}
       <header className="work-area" aria-label="Sampler work area">
         <div className="work-area-toolbar">

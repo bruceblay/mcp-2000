@@ -15,3 +15,4 @@ gcp-service-account.json
 # Playwright MCP
 .playwright-mcp/
 .vercel
+.env*.local

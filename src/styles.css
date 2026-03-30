@@ -260,14 +260,56 @@ button:active:not(:disabled) {
   position: fixed;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
+  gap: 0.75rem;
+  background: rgba(42, 37, 32, 0.85);
   z-index: 9999;
-  color: #fff;
-  font-size: 1.1rem;
+}
+
+.share-loading-overlay .share-loading-lcd {
+  padding: 1.25rem 2rem;
+  background: var(--lcd-bg);
+  border: 2px solid var(--lcd-border);
+  border-radius: 6px;
+  text-align: center;
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+.share-loading-overlay .share-loading-eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.6rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--lcd-text-muted);
+}
+
+.share-loading-overlay .share-loading-label {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--lcd-text);
+}
+
+[data-theme="dark"] .share-loading-overlay {
+  background: rgba(20, 30, 50, 0.88);
+}
+
+[data-theme="dark"] .share-loading-overlay .share-loading-lcd {
+  background: #1a2a10;
+  border-color: #3a4a28;
+}
+
+[data-theme="dark"] .share-loading-overlay .share-loading-eyebrow {
+  color: #6a8a48;
+}
+
+[data-theme="dark"] .share-loading-overlay .share-loading-label {
+  color: #b8c490;
 }
 
 .theme-toggle {
