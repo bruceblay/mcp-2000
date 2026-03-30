@@ -316,6 +316,44 @@ button:active:not(:disabled) {
   text-align: left;
 }
 
+/* Desktop drag-to-change number */
+
+.scroll-picker-drag {
+  cursor: ns-resize;
+  user-select: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.scroll-picker-drag:focus-visible {
+  outline: 1px solid var(--lcd-border);
+  outline-offset: 2px;
+}
+
+.scroll-picker-drag-value {
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.45rem;
+  min-width: 2.8rem;
+  text-align: left;
+  border-bottom: 1px dashed var(--panel-border);
+}
+
+.scroll-picker-drag-value:hover {
+  border-bottom-color: var(--text-strong);
+}
+
+.scroll-picker-edit-input {
+  width: 3.6rem;
+  border: none;
+  border-bottom: 1px solid var(--text-strong);
+  background: transparent;
+  color: var(--text-strong);
+  padding: 0.3rem 0.45rem;
+  font-size: 0.78rem;
+  outline: none;
+}
+
 .scroll-picker-overlay {
   position: fixed;
   inset: 0;
@@ -3182,6 +3220,20 @@ button:active:not(:disabled) {
 
 [data-theme="dark"] .scroll-picker-trigger-value {
   color: var(--dark-yellow);
+}
+
+[data-theme="dark"] .scroll-picker-drag-value {
+  color: var(--dark-yellow);
+  border-bottom-color: rgba(224, 204, 112, 0.3);
+}
+
+[data-theme="dark"] .scroll-picker-drag-value:hover {
+  border-bottom-color: var(--dark-yellow);
+}
+
+[data-theme="dark"] .scroll-picker-edit-input {
+  color: var(--dark-yellow);
+  border-bottom-color: var(--dark-yellow);
 }
 
 [data-theme="dark"] .scroll-picker-sheet {
