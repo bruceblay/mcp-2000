@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import JSZip from 'jszip'
 import { type Pad } from './mock-kit'
 import { SampleWaveform } from './components/sample-waveform'
+import { ScrollPicker } from './components/ScrollPicker'
 import { getEffectDefaults, getEffectsList } from './effects'
 import {
   loopChopCount, midiStorageKey, midiSelectedInputStorageKey,
@@ -4010,16 +4011,13 @@ function App() {
             <strong>{workViewTitle}</strong>
           </div>
           <div className="work-area-transport" aria-label="Transport controls">
-            <label className="transport-field transport-field-inline">
-              <span className="transport-label">Tempo</span>
-              <input
-                type="number"
-                min={40}
-                max={220}
-                value={sequenceTempo}
-                onChange={(event) => setSequenceTempo(Math.min(220, Math.max(40, Number(event.target.value) || 40)))}
-              />
-            </label>
+            <ScrollPicker
+              min={40}
+              max={220}
+              value={sequenceTempo}
+              onChange={setSequenceTempo}
+              label="Tempo"
+            />
             <button
               type="button"
               className={isMetronomeEnabled ? 'primary-button transport-button is-active' : 'secondary-button transport-button'}

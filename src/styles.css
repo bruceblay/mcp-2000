@@ -296,6 +296,144 @@ button:active:not(:disabled) {
   font-size: 0.78rem;
 }
 
+/* ── Scroll Picker (iOS-style wheel) ── */
+
+.scroll-picker-trigger {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+
+.scroll-picker-trigger:active:not(:disabled) {
+  transform: none;
+}
+
+.scroll-picker-trigger-value {
+  color: var(--text-strong);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.45rem;
+  min-width: 2.8rem;
+  text-align: left;
+}
+
+.scroll-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.35);
+  animation: scroll-picker-fade-in 200ms ease;
+}
+
+.scroll-picker-sheet {
+  width: 100%;
+  max-width: 22rem;
+  background: var(--panel-bg);
+  border-radius: 0.75rem 0.75rem 0 0;
+  animation: scroll-picker-slide-up 250ms ease;
+}
+
+.scroll-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.scroll-picker-title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.scroll-picker-done {
+  background: transparent;
+  color: var(--accent-warm);
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.scroll-picker-done:active:not(:disabled) {
+  transform: none;
+  opacity: 0.6;
+}
+
+.scroll-picker-wheel-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.scroll-picker-wheel {
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.scroll-picker-wheel::-webkit-scrollbar {
+  display: none;
+}
+
+.scroll-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: center;
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: var(--text-strong);
+  cursor: pointer;
+  user-select: none;
+}
+
+.scroll-picker-highlight {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  top: 50%;
+  height: 44px;
+  transform: translateY(-50%);
+  border-top: 1px solid var(--panel-border);
+  border-bottom: 1px solid var(--panel-border);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.scroll-picker-fade--top,
+.scroll-picker-fade--bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.scroll-picker-fade--top {
+  top: 0;
+  background: linear-gradient(to bottom, var(--panel-bg), transparent);
+}
+
+.scroll-picker-fade--bottom {
+  bottom: 0;
+  background: linear-gradient(to top, var(--panel-bg), transparent);
+}
+
+@keyframes scroll-picker-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scroll-picker-slide-up {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
 
 .transport-button.primary-button,
 .transport-button.secondary-button {
@@ -591,7 +729,7 @@ button:active:not(:disabled) {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 0.65rem;
+  width: 2.75rem;
   background: transparent;
   cursor: ew-resize;
 }
@@ -613,11 +751,11 @@ button:active:not(:disabled) {
 }
 
 .sample-waveform__region-handle--start {
-  left: -0.325rem;
+  left: -1.375rem;
 }
 
 .sample-waveform__region-handle--end {
-  right: -0.325rem;
+  right: -1.375rem;
 }
 
 .sample-waveform__trim-overlay {
@@ -663,6 +801,17 @@ button:active:not(:disabled) {
   transform: translate(-50%, -50%);
   border: 1px solid var(--lcd-text);
   background: var(--lcd-text);
+}
+
+/* Expanded touch target for mobile — invisible but makes handles easy to grab */
+.sample-waveform__trim-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2.75rem;
+  transform: translateX(-50%);
 }
 
 .sample-waveform__playhead {
@@ -3029,6 +3178,38 @@ button:active:not(:disabled) {
 
 [data-theme="dark"] .transport-field input {
   color: var(--dark-yellow);
+}
+
+[data-theme="dark"] .scroll-picker-trigger-value {
+  color: var(--dark-yellow);
+}
+
+[data-theme="dark"] .scroll-picker-sheet {
+  background: #1e2d4a;
+}
+
+[data-theme="dark"] .scroll-picker-title {
+  color: var(--dark-yellow);
+}
+
+[data-theme="dark"] .scroll-picker-done {
+  color: var(--dark-yellow);
+}
+
+[data-theme="dark"] .scroll-picker-item {
+  color: #c8c0b0;
+}
+
+[data-theme="dark"] .scroll-picker-highlight {
+  border-color: rgba(224, 204, 112, 0.2);
+}
+
+[data-theme="dark"] .scroll-picker-fade--top {
+  background: linear-gradient(to bottom, #1e2d4a, transparent);
+}
+
+[data-theme="dark"] .scroll-picker-fade--bottom {
+  background: linear-gradient(to top, #1e2d4a, transparent);
 }
 
 [data-theme="dark"] .transport-button.primary-button,
