@@ -8,9 +8,9 @@
 - drag/drop sound file onto sample editor to display it on loop edit view
 - key and scale selection?  these get auto fed into our generative tool calls
 - some bugs with the chromatic punch in recording 
-- better default kits: 1 loop, 1 bass, one reg drum, one sea shell drum
 - better example prompts
 - info modal?
 - trigger probability on each step? maybe a right click with a percentage slider?
-- hosting
 - song mode?
+- sharable sequence link
+- how to store generated samples so other people can reference them?
