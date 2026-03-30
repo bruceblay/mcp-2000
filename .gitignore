@@ -4,3 +4,12 @@ dist
 
 public/generated
 .env.local
+
+# OS files
+.DS_Store
+
+# Ableton metadata
+*.asd
+
+# Playwright MCP
+.playwright-mcp/

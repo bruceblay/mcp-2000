@@ -1007,7 +1007,7 @@ button:active:not(:disabled) {
   justify-items: center;
   width: 3.4rem;
   user-select: none;
-  touch-action: none;
+  touch-action: pan-x;
 }
 
 .knob-svg {

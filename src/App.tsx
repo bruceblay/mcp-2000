@@ -2068,7 +2068,7 @@ function App() {
     source.stop(when + 0.06)
   })
 
-  const playPadAudio = useEffectEvent(async (padId: string, options?: { when?: number; fromSequence?: boolean; bankId?: BankId; sequenceSemitoneOffset?: number }) => {
+  const playPadAudio = useEffectEvent(async (padId: string, options?: { when?: number; fromSequence?: boolean; bankId?: BankId; sequenceSemitoneOffset?: number; sequenceGateDuration?: number }) => {
     await ensureAudioEngine()
 
     const context = audioContextRef.current
@@ -2089,15 +2089,18 @@ function App() {
 
     const appliedSemitoneOffset = playbackSettings.semitoneOffset + sequenceSemitoneOffset
     const { startTime, endTime, playbackDuration, playbackRate } = getPadPlaybackWindow(sampleBuffer, playbackSettings, appliedSemitoneOffset)
-    const playbackMode = fromSequence ? 'one-shot' : playbackSettings.playbackMode ?? 'one-shot'
+    const playbackMode = playbackSettings.playbackMode ?? 'one-shot'
     const isLoopingMode = playbackMode === 'loop' || playbackMode === 'gate-loop'
+    const isGateMode = playbackMode === 'gate' || playbackMode === 'gate-loop'
 
+    // Manual loop toggle: tap to start, tap again to stop
     if (!fromSequence && playbackMode === 'loop' && activePadSourcesRef.current.has(padId)) {
       stopPadSource(padId)
       return
     }
 
-    if (!fromSequence && activePadSourcesRef.current.has(padId)) {
+    // Retrigger: stop any existing source for this pad
+    if (activePadSourcesRef.current.has(padId)) {
       stopPadSource(padId)
     }
 
@@ -2126,19 +2129,19 @@ function App() {
     if (isLoopingMode) {
       source.loopStart = startTime
       source.loopEnd = endTime
-      activePadSourcesRef.current.set(padId, { source, gainNode, pannerNode })
-      if (!fromSequence) {
-        setActivePadIds((current) => (current.includes(padId) ? current : current.concat(padId)))
-      }
     }
 
-    if (playbackMode === 'one-shot' || playbackMode === 'gate') {
-      source.onended = () => {
-        activePadSourcesRef.current.delete(padId)
-        if (!fromSequence) {
-          setActivePadIds((current) => current.filter((currentPadId) => currentPadId !== padId))
-          clearPadPlayhead(padId)
-        }
+    // Track source for retrigger and cleanup
+    activePadSourcesRef.current.set(padId, { source, gainNode, pannerNode })
+    if (isLoopingMode && !fromSequence) {
+      setActivePadIds((current) => (current.includes(padId) ? current : current.concat(padId)))
+    }
+
+    source.onended = () => {
+      activePadSourcesRef.current.delete(padId)
+      if (!fromSequence) {
+        setActivePadIds((current) => current.filter((currentPadId) => currentPadId !== padId))
+        clearPadPlayhead(padId)
       }
     }
 
@@ -2146,6 +2149,11 @@ function App() {
       source.start(scheduledWhen ?? 0, startTime)
     } else {
       source.start(scheduledWhen ?? 0, startTime, playbackDuration)
+    }
+
+    // For sequence gate modes, schedule stop after one step duration
+    if (fromSequence && isGateMode && options?.sequenceGateDuration) {
+      source.stop((scheduledWhen ?? context.currentTime) + options.sequenceGateDuration)
     }
 
     if (!fromSequence) {
@@ -2414,7 +2422,7 @@ function App() {
         }
 
         const stepSemitoneOffset = seq.stepSemitoneOffsets[pad.id]?.[bankStepIndex] ?? 0
-        void playPadAudio(pad.id, { when, fromSequence: true, bankId, sequenceSemitoneOffset: stepSemitoneOffset })
+        void playPadAudio(pad.id, { when, fromSequence: true, bankId, sequenceSemitoneOffset: stepSemitoneOffset, sequenceGateDuration: stepDurationSeconds })
 
         if (bankId !== currentBankIdRef.current) {
           return
