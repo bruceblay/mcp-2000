@@ -123,10 +123,10 @@ export const useShare = (
       .then((project) => {
         applySnapshot(project)
         setLoadedFromShare(true)
-        clearShareParam()
       })
       .catch((error) => {
         console.error('Failed to load shared project:', error)
+        // Only clear the param on failure so the user can retry
         clearShareParam()
       })
       .finally(() => setIsLoadingShare(false))
