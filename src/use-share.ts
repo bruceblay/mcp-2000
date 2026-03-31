@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   serializeProject, deserializeProject, snapshotToJson, jsonToSnapshot,
   getPadsNeedingUpload,
-  type ProjectSnapshot, type DeserializedProject, type SerializeProjectInput,
+  type DeserializedProject, type SerializeProjectInput,
 } from './project-snapshot'
 import { blobToBase64 } from './audio-utils'
 

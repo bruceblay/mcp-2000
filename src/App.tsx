@@ -38,11 +38,8 @@ import {
   readStoredMidiPadMappings, readStoredMidiInputId,
 } from './state-init'
 import { createGlobalEffectRouting } from './effects-routing'
-import {
-  serializeProject, deserializeProject,
-  type ProjectSnapshot, type DeserializedProject,
-} from './project-snapshot'
-import { useShare, type ShareStatus } from './use-share'
+import { type DeserializedProject } from './project-snapshot'
+import { useShare } from './use-share'
 import { EffectsWorkspace } from './components/EffectsWorkspace'
 import { MixerWorkspace } from './components/MixerWorkspace'
 import { SequenceWorkspace } from './components/SequenceWorkspace'
@@ -1582,26 +1579,6 @@ function App() {
   // Project snapshot — serialize / restore
   // -----------------------------------------------------------------------
 
-  const getSnapshot = (): ProjectSnapshot =>
-    serializeProject({
-      activeBankId: currentBankId,
-      bankStates,
-      bankMixerGains,
-      bankMixerMuted,
-      bankMixerSoloed,
-      masterOutputGain,
-      bankEffects,
-      masterEffect,
-      sequenceTempo,
-      isChromaticModeActive,
-      chromaticOctave,
-      isArpEnabled,
-      isArpLatched,
-      arpDivision,
-      arpMode,
-      isDarkMode,
-    })
-
   const applySnapshot = (project: DeserializedProject) => {
     setCurrentBankId(project.activeBankId)
     setBankStates(project.bankStates)
@@ -1646,8 +1623,8 @@ function App() {
   ])
 
   const {
-    shareStatus, shareUrl, shareError,
-    isLoadingShare, loadedFromShare,
+    shareStatus, shareUrl: _shareUrl, shareError: _shareError,
+    isLoadingShare, loadedFromShare: _loadedFromShare,
     startShare, dismissShare,
   } = useShare(getSerializeInput, applySnapshot)
 
