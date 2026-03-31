@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Circle, Download, Link, Metronome, Piano, Play, Share2, Square } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Circle, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import JSZip from 'jszip'
 import { type Pad } from './mock-kit'
@@ -4095,11 +4095,10 @@ function App() {
                   aria-label={shareStatus === 'done' ? 'Share link copied' : 'Share project'}
                   title={shareStatus === 'done' ? 'Link copied!' : 'Share'}
                 >
-                  {shareStatus === 'done' ? <Link size={14} /> : <Share2 size={14} />}
-                  {shareStatus === 'idle' && 'Share'}
+                  {shareStatus === 'idle' && 'Share Project'}
                   {shareStatus === 'uploading' && 'Uploading…'}
                   {shareStatus === 'creating' && 'Creating…'}
-                  {shareStatus === 'done' && 'Copied!'}
+                  {shareStatus === 'done' && 'Link Copied!'}
                   {shareStatus === 'error' && 'Failed'}
                 </button>
               </div>

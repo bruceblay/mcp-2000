@@ -1,4 +1,5 @@
-import { promptPresets } from '../constants'
+import { useMemo } from 'react'
+import { promptPresets, placeholderPrompts } from '../constants'
 import type { GenerationStatus, GenerationMode } from '../types'
 
 type GenerationPanelProps = {
@@ -16,6 +17,8 @@ export function GenerationPanel({
   onPromptChange,
   onGenerateAudio,
 }: GenerationPanelProps) {
+  const placeholder = useMemo(() => 'Try: ' + placeholderPrompts[Math.floor(Math.random() * placeholderPrompts.length)], [])
+
   return (
     <section className="prompt-panel panel">
       <div className="panel-heading">
@@ -25,7 +28,7 @@ export function GenerationPanel({
       <label className="prompt-field">
         <span>Describe a drum kit or loop</span>
         <textarea
-          placeholder="Try: gritty Memphis kit with blown-out snares and a short sub kick"
+          placeholder={placeholder}
           rows={5}
           value={promptText}
           onChange={(event) => onPromptChange(event.target.value)}

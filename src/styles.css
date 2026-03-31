@@ -3175,7 +3175,7 @@ button:active:not(:disabled) {
   }
 }
 
-@media (max-width: 585px) {
+@media (max-width: 605px) {
   .work-area-toolbar {
     grid-template-columns: 1fr;
     gap: 0.5rem;

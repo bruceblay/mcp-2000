@@ -6,11 +6,27 @@ export const midiStorageKey = 'mcp-2000-midi-pad-notes'
 export const midiSelectedInputStorageKey = 'mcp-2000-midi-input-id'
 export const defaultMidiBaseNote = 36
 
+export const placeholderPrompts = [
+  'brass marching band processed through a broken radio',
+  'dusty vinyl jazz chopped and pitch-shifted',
+  'kitchen percussion with pots, pans, and knife chops',
+  'sci-fi spaceship hums, laser blasts, and airlock hisses',
+  'Bollywood strings meets trap hi-hats',
+  'samurai film foley with wooden strikes and sword scrapes',
+  'thunderstorm kit with rain taps, cracks, and deep rumbles',
+  'broken VHS tape glitches and tracking artifacts',
+  'typewriter keys, bell dings, and paper rips',
+  'old western saloon with piano stabs and spurred boots',
+  'factory floor kit with hydraulic presses and metal grinders',
+  'subway station echoes, turnstile clicks, and train brakes',
+]
+
 export const promptPresets = [
   'Percussion kit made from cracking ice, dripping water, and frozen lake resonance',
   'Zen flute melody with windchimes and flowing water — 85 BPM loop',
   'Deep forest floor kit with fallen branches, wet moss thuds, and bird call stabs',
   'Utopian, otherworldly bird songs - 78bpm loop',
+  '8-bit arcade with coin drops and power-ups',
 ]
 
 export const groupLabels: Record<string, string> = {
