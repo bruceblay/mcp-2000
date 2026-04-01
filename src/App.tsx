@@ -115,6 +115,13 @@ function App() {
   const [isMidiPanelOpen, setIsMidiPanelOpen] = useState(false)
   const [bankSnapshots, setBankSnapshots] = useState<BankSnapshot[]>([])
   const [openBankPopover, setOpenBankPopover] = useState<BankId | null>(null)
+  const [audioDebug, setAudioDebug] = useState<string[]>([])
+  const audioDebugRef = useRef<string[]>([])
+  const pushDebug = (msg: string) => {
+    const line = `[${new Date().toLocaleTimeString()}] ${msg}`
+    audioDebugRef.current = [...audioDebugRef.current.slice(-8), line]
+    setAudioDebug(audioDebugRef.current)
+  }
 
   const bankPopoverRef = useRef<HTMLDivElement>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -498,24 +505,23 @@ function App() {
     const unlockAudio = () => {
       if (mediaChannelActivated && contextUnlocked) return
 
-      // Play silent HTML <audio> on the very first user gesture to force iOS to
-      // activate the media audio channel. Must happen independently of whether
-      // the AudioContext exists yet — the context is created lazily on first pad
-      // tap, so by the time it exists the gesture window may have passed.
       if (!mediaChannelActivated) {
         const audio = new Audio(SILENT_MP3)
         audio.loop = true
         audio.volume = 0.01
         audio.setAttribute('playsinline', '')
-        audio.play().catch(() => {})
+        audio.play().then(() => pushDebug('unlock: HTML audio playing')).catch((e) => pushDebug('unlock: HTML audio FAILED: ' + e.message))
         mediaChannelActivated = true
       }
 
       const ctx = audioContextRef.current
-      if (!ctx) return
+      if (!ctx) {
+        pushDebug('unlock: no AudioContext yet')
+        return
+      }
+      pushDebug('unlock: ctx.state=' + ctx.state)
       if (isContextBlocked(ctx)) {
-        // Don't chain after resume() — it can hang on iOS. Fire both in parallel.
-        ctx.resume().catch(() => {})
+        ctx.resume().then(() => pushDebug('unlock: resume OK, state=' + ctx.state)).catch((e) => pushDebug('unlock: resume FAILED: ' + e.message))
 
         const silent = ctx.createBuffer(1, 1, ctx.sampleRate)
         const src = ctx.createBufferSource()
@@ -1136,6 +1142,7 @@ function App() {
 
   const getAudioContext = () => {
     if (!audioContextRef.current) {
+      pushDebug('getAudioContext: creating new AudioContext')
       const context = new window.AudioContext({ sampleRate: 44100 })
       const masterGain = context.createGain()
       const outputLimiter = context.createDynamicsCompressor()
@@ -1176,9 +1183,11 @@ function App() {
       masterEffectInputRef.current = masterEffectInput
       masterGainRef.current = masterGain
       outputLimiterRef.current = outputLimiter
+      pushDebug('getAudioContext: created, state=' + context.state)
     }
 
     if (audioContextRef.current.state === 'suspended' || (audioContextRef.current.state as string) === 'interrupted') {
+      pushDebug('getAudioContext: resuming from ' + audioContextRef.current.state)
       void audioContextRef.current.resume()
     }
 
@@ -1213,15 +1222,18 @@ function App() {
   }
 
   const ensureAudioEngine = async () => {
+    pushDebug('ensureEngine: status=' + engineStatus)
     if (engineStatus === 'ready') {
       const context = getAudioContext()
       if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
+        pushDebug('ensureEngine: resuming, state=' + context.state)
         await context.resume()
       }
       return
     }
 
     if (loadPromiseRef.current) {
+      pushDebug('ensureEngine: awaiting existing load')
       await loadPromiseRef.current
       const context = audioContextRef.current
       if (context && (context.state === 'suspended' || (context.state as string) === 'interrupted')) {
@@ -1236,12 +1248,17 @@ function App() {
         setLoadedPadCount(bufferMapRef.current.size)
 
         const context = getAudioContext()
+        pushDebug('ensureEngine: ctx.state=' + context.state)
         if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
+          pushDebug('ensureEngine: awaiting resume...')
           await context.resume()
+          pushDebug('ensureEngine: resume resolved, state=' + context.state)
         }
 
         // Load current bank first so the user can start playing immediately
+        pushDebug('ensureEngine: loading ' + currentBankPads.length + ' pads...')
         await Promise.all(currentBankPads.map((pad) => loadPadBuffer(pad)))
+        pushDebug('ensureEngine: loaded, setting ready')
         setEngineStatus('ready')
 
         // Load remaining banks in the background
@@ -1253,6 +1270,7 @@ function App() {
           loadPadBuffer(pad).catch(() => {})
         }
       } catch (error) {
+        pushDebug('ensureEngine: ERROR: ' + (error instanceof Error ? error.message : String(error)))
         console.error(error)
         bufferMapRef.current.clear()
         reversedBufferMapRef.current.clear()
@@ -2158,7 +2176,9 @@ function App() {
   })
 
   const playPadAudio = useEffectEvent(async (padId: string, options?: { when?: number; fromSequence?: boolean; bankId?: BankId; sequenceSemitoneOffset?: number; sequenceGateDuration?: number }) => {
+    pushDebug('playPad: ' + padId)
     await ensureAudioEngine()
+    pushDebug('playPad: engine ready')
 
     const context = audioContextRef.current
     const scheduledWhen = options?.when
@@ -2173,6 +2193,7 @@ function App() {
     const bankGainNode = bankGainNodesRef.current[targetBankId]
 
     if (!context || !sampleBuffer || !playbackSettings || !currentPad || !bankGainNode) {
+      pushDebug('playPad: BAIL ctx=' + !!context + ' buf=' + !!sampleBuffer + ' settings=' + !!playbackSettings + ' pad=' + !!currentPad + ' gain=' + !!bankGainNode)
       return
     }
 
@@ -2239,6 +2260,7 @@ function App() {
     } else {
       source.start(scheduledWhen ?? 0, startTime, playbackDuration)
     }
+    pushDebug('playPad: STARTED ctx.state=' + context.state + ' gain=' + gainNode.gain.value.toFixed(2) + ' rate=' + source.playbackRate.value.toFixed(2))
 
     // For sequence gate modes, schedule stop after one step duration
     if (fromSequence && isGateMode && options?.sequenceGateDuration) {
@@ -4264,6 +4286,12 @@ function App() {
   return (
     <TooltipProvider>
     <main className="app-shell">
+      {audioDebug.length > 0 && (
+        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 99999, background: 'rgba(0,0,0,0.85)', color: '#0f0', fontSize: '10px', fontFamily: 'monospace', padding: '6px 8px', maxHeight: '30vh', overflow: 'auto', pointerEvents: 'auto' }}>
+          <button type="button" onClick={() => { audioDebugRef.current = []; setAudioDebug([]) }} style={{ float: 'right', color: '#f00', background: 'none', border: 'none', fontSize: '10px', fontFamily: 'monospace' }}>clear</button>
+          {audioDebug.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      )}
       {isLoadingShare && (
         <div className="share-loading-overlay">
           <div className="share-loading-lcd">
