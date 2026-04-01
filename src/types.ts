@@ -134,6 +134,13 @@ export type BankState = {
   activeSequenceIndex: number
 }
 
+export type BankSnapshot = {
+  id: string
+  label: string
+  bankState: BankState
+  createdAt: number
+}
+
 export type ChromaticKeyDefinition = {
   id: string
   keyboardKey: string

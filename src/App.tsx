@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Circle, Download, Metronome, Piano, Play, Square } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Circle, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import JSZip from 'jszip'
 import { type Pad } from './mock-kit'
@@ -20,6 +20,7 @@ import {
   type ActivePadAudio, type ActiveChromaticNoteAudio, type ActiveLoopPlayback, type MidiPadNoteMappings,
   type NavigatorWithMidi, type PadPlaybackSetting, type BankState, type Sequence,
   type ArpMode, type ArpDivision, type EffectChainState, type EffectChainSlotId, effectChainSlotIds,
+  type BankSnapshot,
 } from './types'
 import {
   clamp, buildDistortionCurve, buildImpulseResponse, createReversedBuffer,
@@ -33,13 +34,14 @@ import { formatClockDuration, formatChopRegionLabel, formatMidiNoteLabel } from 
 import { getChromaticRelativeSemitone, getChromaticNoteLabel, buildChromaticNoteId } from './chromatic-utils'
 import {
   createInitialBankMixerGains, createInitialBankToggleState, getEffectiveBankGain,
-  createInitialBanksState, createInitialSequence, getActiveSequence,
+  createInitialBanksState, createInitialBankState, createInitialSequence, getActiveSequence,
   createInitialEffectChain, createInitialBankEffects,
   readStoredMidiPadMappings, readStoredMidiInputId,
 } from './state-init'
 import { createGlobalEffectRouting } from './effects-routing'
 import { type DeserializedProject } from './project-snapshot'
 import { useShare } from './use-share'
+import { ChatPanel } from './components/ChatPanel'
 import { EffectsWorkspace } from './components/EffectsWorkspace'
 import { MixerWorkspace } from './components/MixerWorkspace'
 import { SequenceWorkspace } from './components/SequenceWorkspace'
@@ -48,6 +50,7 @@ import { Knob } from './components/Knob'
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false)
+  const [isChatOpen, setIsChatOpen] = useState(false)
   const [currentBankId, setCurrentBankId] = useState<BankId>('A')
   const [bankStates, setBankStates] = useState<Record<BankId, BankState>>(() => createInitialBanksState())
   const [bankMixerGains, setBankMixerGains] = useState<Record<BankId, number>>(() => createInitialBankMixerGains())
@@ -106,7 +109,10 @@ function App() {
   const [midiLearnPadId, setMidiLearnPadId] = useState<string | null>(null)
   const [midiPadNoteMappings, setMidiPadNoteMappings] = useState<MidiPadNoteMappings>(() => readStoredMidiPadMappings())
   const [isMidiPanelOpen, setIsMidiPanelOpen] = useState(false)
+  const [bankSnapshots, setBankSnapshots] = useState<BankSnapshot[]>([])
+  const [openBankPopover, setOpenBankPopover] = useState<BankId | null>(null)
 
+  const bankPopoverRef = useRef<HTMLDivElement>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
   const bankGainNodesRef = useRef<Partial<Record<BankId, GainNode>>>({})
@@ -222,6 +228,17 @@ function App() {
   }, [isDarkMode])
 
   useEffect(() => {
+    if (openBankPopover === null) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (bankPopoverRef.current && !bankPopoverRef.current.contains(e.target as Node)) {
+        setOpenBankPopover(null)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [openBankPopover])
+
+  useEffect(() => {
     const blurSelect = (e: Event) => {
       if (e.target instanceof HTMLSelectElement) {
         requestAnimationFrame(() => (e.target as HTMLElement).blur())
@@ -255,6 +272,12 @@ function App() {
       referencedUrls.add(recordedTake.previewUrl)
     }
 
+    for (const snapshot of bankSnapshots) {
+      for (const pad of snapshot.bankState.pads) {
+        referencedUrls.add(pad.sampleUrl)
+      }
+    }
+
     for (const url of Array.from(ephemeralAudioUrlsRef.current)) {
       if (!referencedUrls.has(url)) {
         URL.revokeObjectURL(url)
@@ -269,7 +292,7 @@ function App() {
       }
     }
     setLoadedPadCount(bufferMapRef.current.size)
-  }, [allPads, generatedLoop?.sampleUrl, recordedTake?.previewUrl])
+  }, [allPads, generatedLoop?.sampleUrl, recordedTake?.previewUrl, bankSnapshots])
 
   useEffect(() => {
     for (const bankId of bankIds) {
@@ -3129,6 +3152,40 @@ function App() {
     })
   }
 
+  const snapshotBank = (label: string, state: BankState) => {
+    const snapshot: BankSnapshot = {
+      id: `snap-${Date.now()}`,
+      label,
+      bankState: structuredClone(state),
+      createdAt: Date.now(),
+    }
+    setBankSnapshots((prev) => [...prev.slice(-19), snapshot])
+  }
+
+  const loadDefaultBank = (targetSlot: BankId, sourceBank: BankId) => {
+    stopAllPadSources()
+    stopAllChromaticNotes()
+    setEditorPlayheadFraction(null)
+    setActivePadIds([])
+    setBankStates((current) => ({
+      ...current,
+      [targetSlot]: createInitialBankState(sourceBank),
+    }))
+    setOpenBankPopover(null)
+  }
+
+  const loadBankFromSnapshot = (targetSlot: BankId, snapshot: BankSnapshot) => {
+    stopAllPadSources()
+    stopAllChromaticNotes()
+    setEditorPlayheadFraction(null)
+    setActivePadIds([])
+    setBankStates((current) => ({
+      ...current,
+      [targetSlot]: structuredClone(snapshot.bankState),
+    }))
+    setOpenBankPopover(null)
+  }
+
   const updateTrim = (
     padId: string,
     field: 'startFraction' | 'endFraction',
@@ -3615,6 +3672,22 @@ function App() {
         }
       })
 
+      const trimmedPrompt = nextPrompt.length > 40 ? nextPrompt.slice(0, 37) + '…' : nextPrompt
+      snapshotBank(trimmedPrompt, {
+        ...bankStates[currentBankId],
+        pads: bankStates[currentBankId].pads.map((pad) => {
+          const gen = payload.generatedPads?.find((g) => g.id === pad.id)
+          return gen ?? pad
+        }),
+        selectedPadId: payload.generatedPads?.[0]?.id ?? bankStates[currentBankId].selectedPadId,
+        playbackSettings: {
+          ...bankStates[currentBankId].playbackSettings,
+          ...Object.fromEntries(
+            (payload.generatedPads ?? []).map((pad) => [pad.id, { startFraction: 0, endFraction: 1, semitoneOffset: 0, gain: pad.gain, pan: 0, playbackMode: 'one-shot' as const, reversed: false }]),
+          ),
+        },
+      })
+
       setActivePadIds([])
       setGenerationStatus('idle')
       setGenerationMessage(
@@ -4007,6 +4080,26 @@ function App() {
       }
     })
 
+    const chopLabel = generatedLoop.sampleName || 'Loop chops'
+    snapshotBank(chopLabel, {
+      ...bankStates[targetBankId],
+      pads: bankStates[targetBankId].pads.map((pad, index) => {
+        const region = loopChopRegions[index]
+        if (!region) return pad
+        return {
+          ...pad,
+          label: `Chop ${String(index + 1).padStart(2, '0')}`,
+          sampleName: `${generatedLoop.sampleName} Chop ${index + 1}`,
+          sampleFile: generatedLoop.sampleFile,
+          sampleUrl: generatedLoop.sampleUrl,
+          sourceType: generatedLoop.sourceType,
+          durationLabel: `${Math.max(0.01, region.end - region.start).toFixed(2)}s chop`,
+          group: 'chop',
+          gain: 1,
+        }
+      }),
+    })
+
     setGenerationMessage(`Loaded ${loopChopRegions.length} chops from the loop into Bank ${targetBankId}.`)
     setCurrentBankId(targetBankId)
     setEditorSource('pad')
@@ -4067,7 +4160,7 @@ function App() {
       {isLoadingShare && (
         <div className="share-loading-overlay">
           <div className="share-loading-lcd">
-            <p className="share-loading-eyebrow">MCP 2000xl</p>
+            <p className="share-loading-eyebrow">MCP 2000</p>
             <p className="share-loading-label">Loading shared project…</p>
           </div>
         </div>
@@ -4076,7 +4169,7 @@ function App() {
         <div className="work-area-toolbar">
           <div className="work-area-title">
             <div className="work-area-title-row">
-              <p className="eyebrow">MCP 2000xl</p>
+              <p className="eyebrow">MCP 2000</p>
               <div className="title-row-actions">
                 <button
                   type="button"
@@ -4100,6 +4193,15 @@ function App() {
                   {shareStatus === 'creating' && 'Creating…'}
                   {shareStatus === 'done' && 'Link Copied!'}
                   {shareStatus === 'error' && 'Failed'}
+                </button>
+                <button
+                  type="button"
+                  className="tour-button"
+                  onClick={() => setIsChatOpen(c => !c)}
+                  aria-label="Open assistant"
+                  title="Help"
+                >
+                  ?
                 </button>
               </div>
             </div>
@@ -4739,16 +4841,59 @@ function App() {
           <div className="bank-switcher" aria-label="Pad banks">
             <div className="bank-buttons" role="tablist" aria-label="Pad banks">
               {bankIds.map((bankId) => (
-                <button
+                <div
                   key={bankId}
-                  type="button"
-                  role="tab"
-                  aria-selected={currentBankId === bankId}
-                  className={currentBankId === bankId ? 'bank-button is-current' : 'bank-button'}
-                  onClick={() => switchBank(bankId)}
+                  className="bank-button-group"
+                  ref={openBankPopover === bankId ? bankPopoverRef : undefined}
                 >
-                  Bank {bankId}
-                </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={currentBankId === bankId}
+                    className={currentBankId === bankId ? 'bank-button is-current' : 'bank-button'}
+                    onClick={() => switchBank(bankId)}
+                  >
+                    <span>Bank {bankId}</span>
+                    <span
+                      role="button"
+                      aria-label={`Select bank content for slot ${bankId}`}
+                      className="bank-chevron"
+                      onClick={(e) => { e.stopPropagation(); setOpenBankPopover(openBankPopover === bankId ? null : bankId) }}
+                    >
+                      <ChevronDown size={10} />
+                    </span>
+                  </button>
+                  {openBankPopover === bankId && (
+                    <div className="bank-popover">
+                      <div className="bank-popover-section-label">Defaults</div>
+                      {bankIds.map((defaultId) => (
+                        <button
+                          key={`default-${defaultId}`}
+                          type="button"
+                          className="bank-popover-item"
+                          onClick={() => loadDefaultBank(bankId, defaultId)}
+                        >
+                          {{ A: 'Drums A', B: 'Kraftpunk B', C: 'Ice Drums C', D: 'Red Guitar D' }[defaultId]}
+                        </button>
+                      ))}
+                      {bankSnapshots.length > 0 && (
+                        <>
+                          <div className="bank-popover-section-label">Generated</div>
+                          {bankSnapshots.map((snapshot) => (
+                            <button
+                              key={snapshot.id}
+                              type="button"
+                              className="bank-popover-item"
+                              onClick={() => loadBankFromSnapshot(bankId, snapshot)}
+                            >
+                              {snapshot.label}
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>
@@ -4856,6 +5001,8 @@ function App() {
         />
 
       </section>
+
+      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </main>
   )
 }
