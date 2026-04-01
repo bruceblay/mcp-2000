@@ -3446,6 +3446,14 @@ button:active:not(:disabled) {
   }
 }
 
+/* Prevent iOS auto-zoom on input focus (triggers below 16px) */
+@media (pointer: coarse) {
+  .prompt-field textarea,
+  .chat-panel-input {
+    font-size: 16px;
+  }
+}
+
 [data-theme="dark"] {
   --dark-gold: #b89830;
   --dark-yellow: #e0cc70;
