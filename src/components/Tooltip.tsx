@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 
 export const TooltipProvider = TooltipPrimitive.Provider
@@ -8,8 +9,8 @@ export const Tooltip = ({
   side = 'top',
   sideOffset = 6,
 }: {
-  children: React.ReactNode
-  label: React.ReactNode
+  children: ReactNode
+  label: ReactNode
   side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
 }) => (
