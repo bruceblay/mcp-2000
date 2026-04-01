@@ -1202,7 +1202,7 @@ function App() {
 
     const context = getAudioContext()
     if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
-      await context.resume()
+      context.resume().catch(() => {})
     }
 
     const response = await fetch(audioUrl)
@@ -1225,9 +1225,10 @@ function App() {
     pushDebug('ensureEngine: status=' + engineStatus)
     if (engineStatus === 'ready') {
       const context = getAudioContext()
+      // Fire-and-forget: never await resume() — it can hang on iOS
       if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
-        pushDebug('ensureEngine: resuming, state=' + context.state)
-        await context.resume()
+        pushDebug('ensureEngine: resuming (ready path), state=' + context.state)
+        context.resume().catch(() => {})
       }
       return
     }
@@ -1237,7 +1238,7 @@ function App() {
       await loadPromiseRef.current
       const context = audioContextRef.current
       if (context && (context.state === 'suspended' || (context.state as string) === 'interrupted')) {
-        await context.resume()
+        context.resume().catch(() => {})
       }
       return
     }
@@ -1249,10 +1250,11 @@ function App() {
 
         const context = getAudioContext()
         pushDebug('ensureEngine: ctx.state=' + context.state)
+        // Fire-and-forget: decodeAudioData doesn't need a running context,
+        // and await resume() hangs on iOS Chrome when the gesture context is lost.
         if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
-          pushDebug('ensureEngine: awaiting resume...')
-          await context.resume()
-          pushDebug('ensureEngine: resume resolved, state=' + context.state)
+          pushDebug('ensureEngine: firing resume (no await)')
+          context.resume().catch(() => {})
         }
 
         // Load current bank first so the user can start playing immediately
@@ -2725,7 +2727,7 @@ function App() {
 
     const context = getAudioContext()
     if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
-      await context.resume()
+      context.resume().catch(() => {})
     }
 
     stopAllPadSources()
@@ -3960,7 +3962,7 @@ function App() {
 
     const context = getAudioContext()
     if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
-      await context.resume()
+      context.resume().catch(() => {})
     }
 
     const buffer = await loadAudioBuffer(generatedLoop.sampleUrl, generatedLoop.sampleFile)
