@@ -1,7 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { requestSchema, transformSampleSchema, executeGenerateKit, executeTransformSample } from './api/_shared'
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { streamText } from 'ai'
+import { requestSchema, transformSampleSchema, executeGenerateKit, executeTransformSample, CHAT_SYSTEM_PROMPT } from './api/_shared'
 
 const readJsonBody = async (req: IncomingMessage) => {
   const chunks: Uint8Array[] = []
@@ -118,6 +120,59 @@ export default defineConfig(({ mode }) => {
     }
   }
 
+  const chatHandler = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+    next: (error?: unknown) => void,
+  ) => {
+    if (req.url !== '/api/chat') {
+      next()
+      return
+    }
+
+    if (req.method !== 'POST') {
+      sendJson(res, 405, { error: 'Use POST /api/chat.' })
+      return
+    }
+
+    if (!env.ANTHROPIC_API_KEY) {
+      sendJson(res, 500, { error: 'Missing ANTHROPIC_API_KEY.' })
+      return
+    }
+
+    try {
+      const { messages } = await readJsonBody(req) as { messages?: Array<{ role: string; content: string }> }
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        sendJson(res, 400, { error: 'messages array is required.' })
+        return
+      }
+
+      const anthropic = createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })
+      const result = streamText({
+        model: anthropic('claude-haiku-4-5-20251001'),
+        system: CHAT_SYSTEM_PROMPT,
+        messages: messages as Array<{ role: 'user' | 'assistant'; content: string }>,
+      })
+
+      res.setHeader('Content-Type', 'text/event-stream')
+      res.setHeader('Cache-Control', 'no-cache')
+      res.setHeader('Connection', 'keep-alive')
+
+      for await (const chunk of result.textStream) {
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`)
+      }
+      res.write('data: [DONE]\n\n')
+      res.end()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unexpected chat error.'
+      if (!res.headersSent) {
+        sendJson(res, 500, { error: message })
+      } else {
+        res.end()
+      }
+    }
+  }
+
   return {
     plugins: [
       react(),
@@ -126,10 +181,12 @@ export default defineConfig(({ mode }) => {
         configureServer(server) {
           server.middlewares.use(generateKitHandler)
           server.middlewares.use(transformSampleHandler)
+          server.middlewares.use(chatHandler)
         },
         configurePreviewServer(server) {
           server.middlewares.use(generateKitHandler)
           server.middlewares.use(transformSampleHandler)
+          server.middlewares.use(chatHandler)
         },
       },
     ],

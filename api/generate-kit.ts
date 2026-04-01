@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requestSchema, executeGenerateKit } from './_shared/index.js'
+import { logPrompt } from './_shared/db.js'
 
 export const config = { maxDuration: 60 }
 
@@ -16,6 +17,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const parsedRequest = requestSchema.parse(req.body)
+    const mode = parsedRequest.mode === 'random-sequence' ? 'generate-sequence' as const
+      : parsedRequest.mode === 'sequence' ? 'generate-sequence' as const
+      : parsedRequest.mode === 'loop' ? 'generate-loop' as const
+      : parsedRequest.mode === 'pad' ? 'generate-pad' as const
+      : 'generate-kit' as const
+    logPrompt(mode, parsedRequest.prompt, { bankId: parsedRequest.bankId, mode: parsedRequest.mode })
     const result = await executeGenerateKit(
       process.env.ANTHROPIC_API_KEY,
       process.env.ELEVENLABS_API_KEY || '',

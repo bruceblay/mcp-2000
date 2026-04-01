@@ -2,20 +2,17 @@
 - edit sample type/description text (2)
 - note repeat (4)
 - isolate sounds or instruments on an input sample (9)
-- recorded logs of what other people are prompting (4)
 - analytics (5)
 - sample envelope (4)
 - drag/drop sound file onto sample editor to display it on loop edit view
 - key and scale selection?  these get auto fed into our generative tool calls
-- some bugs with the chromatic punch in recording 
-- better example prompts
+- some bugs with the chromatic punch in recording
 - info modal?
 - trigger probability on each step? maybe a right click with a percentage slider?
 - song mode?
-- sharable sequence link
-- how to store generated samples so other people can reference them?
 - library
 - some effects need work: bitcrusher, cd skipper, lofi tape
 - electron app?
 - sound feedback for playing sound on bank faders on mixer
-- 
+- select chevron on pads banks so users can have more flexibility on which banks are in use.  would also allow for reverting bank setting if accidentally overwritten.
+- add some self identification in an explainer maybe answer 'who made this?' in the chat

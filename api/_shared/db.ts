@@ -21,6 +21,22 @@ const getDb = (): Firestore => {
 
 const projects = () => getDb().collection('shared_projects')
 const samples = () => getDb().collection('shared_samples')
+const promptLogs = () => getDb().collection('prompt_logs')
+
+// ---------------------------------------------------------------------------
+// Prompt logging (fire-and-forget)
+// ---------------------------------------------------------------------------
+
+export type PromptLogSource = 'generate-kit' | 'generate-loop' | 'generate-pad' | 'generate-sequence' | 'transform-sample'
+
+export const logPrompt = (source: PromptLogSource, prompt: string, metadata?: Record<string, unknown>) => {
+  promptLogs().add({
+    source,
+    prompt,
+    ...metadata,
+    createdAt: Timestamp.now(),
+  }).catch(() => {}) // fire-and-forget, never block the request
+}
 
 // ---------------------------------------------------------------------------
 // Project CRUD
@@ -96,6 +112,81 @@ export const insertSample = async (hash: string, gcsPath: string, gcsUrl: string
 
 // ---------------------------------------------------------------------------
 // Cleanup (called by cron — handles samples only; Firestore TTL handles projects)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Prompt log listing
+// ---------------------------------------------------------------------------
+
+export type PromptLogEntry = {
+  source: PromptLogSource
+  prompt: string
+  createdAt: number
+  metadata: Record<string, unknown>
+}
+
+export const listRecentPrompts = async (limit = 100): Promise<PromptLogEntry[]> => {
+  const snapshot = await promptLogs()
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get()
+
+  return snapshot.docs.map((doc) => {
+    const data = doc.data()
+    const { source, prompt, createdAt, ...metadata } = data
+    return {
+      source: source as PromptLogSource,
+      prompt: prompt as string,
+      createdAt: (createdAt as Timestamp).toMillis(),
+      metadata,
+    }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Recent shares listing
+// ---------------------------------------------------------------------------
+
+export type ShareSummary = {
+  id: string
+  createdAt: number
+  expiresAt: number
+  tempo: number
+  bankSummaries: Record<string, string[]>
+}
+
+export const listRecentShares = async (limit = 50): Promise<ShareSummary[]> => {
+  const snapshot = await projects()
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get()
+
+  return snapshot.docs.map((doc) => {
+    const data = doc.data()
+    const createdAt = (data.createdAt as Timestamp).toMillis()
+    const expiresAt = (data.expiresAt as Timestamp).toMillis()
+
+    let tempo = 94
+    const bankSummaries: Record<string, string[]> = {}
+
+    try {
+      const parsed = JSON.parse(data.snapshot as string)
+      tempo = parsed.sequenceTempo ?? 94
+
+      for (const bankId of ['A', 'B', 'C', 'D']) {
+        const bank = parsed.bankStates?.[bankId]
+        if (bank?.pads) {
+          bankSummaries[bankId] = bank.pads.map((p: { sampleName: string }) => p.sampleName)
+        }
+      }
+    } catch {}
+
+    return { id: doc.id, createdAt, expiresAt, tempo, bankSummaries }
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Cleanup
 // ---------------------------------------------------------------------------
 
 export const getOrphanedSamples = async (): Promise<Array<{ hash: string; gcsPath: string }>> => {

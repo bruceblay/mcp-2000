@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { transformSampleSchema, executeTransformSample } from './_shared/index.js'
+import { logPrompt } from './_shared/db.js'
 
 export const config = { maxDuration: 60 }
 
@@ -16,6 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const parsedRequest = transformSampleSchema.parse(req.body)
+    logPrompt('transform-sample', parsedRequest.prompt, { sampleName: parsedRequest.sampleName, editorSource: parsedRequest.editorSource })
     const result = await executeTransformSample(process.env.ELEVENLABS_API_KEY, parsedRequest)
 
     res.status(200).json({

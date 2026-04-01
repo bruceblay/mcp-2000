@@ -183,6 +183,42 @@ needed.
 
 This keeps GCS storage bounded at the TTL steady state.
 
+### Admin: Recent Shares Log
+
+`GET /api/shares/recent` returns a summary of recent shared projects.
+Protected by the `CRON_SECRET` bearer token.
+
+```bash
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  https://www.mcp2000.com/api/shares/recent?limit=50
+```
+
+Returns for each share: ID, creation time, expiry time, tempo, and all pad
+sample names per bank. Useful for seeing what people are making.
+
+The share URL for any entry is `https://www.mcp2000.com/?s={id}`.
+
+### Admin: Prompt Log
+
+`GET /api/shares/prompts` returns all prompts submitted to the generation
+endpoints. Protected by the `CRON_SECRET` bearer token.
+
+```bash
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  https://www.mcp2000.com/api/shares/prompts?limit=100
+```
+
+Logs prompts from all five sources:
+- `generate-kit` — full 16-pad kit generation
+- `generate-loop` — loop generation for chopping
+- `generate-pad` — single pad generation
+- `generate-sequence` — sequence pattern generation
+- `transform-sample` — sample editor ElevenLabs transform
+
+Each entry includes the source, prompt text, timestamp, and relevant metadata
+(bank ID, mode, sample name, etc.). Logging is fire-and-forget — it never
+blocks or slows down the generation request.
+
 ### Alternatives Considered
 
 **Vercel Blob + KV** — convenient but expensive at scale. Egress kills you
