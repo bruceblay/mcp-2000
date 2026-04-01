@@ -1,5 +1,5 @@
 import { startTransition, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, Circle, Download, Metronome, Piano, Play, Square } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Circle, Disc, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import JSZip from 'jszip'
 import { type Pad } from './mock-kit'
@@ -11,6 +11,7 @@ import {
   groupLabels, chromaticBaseOctave, chromaticMinOctave, chromaticMaxOctave,
   chromaticKeyLayout, chromaticKeyboardMap, sequenceLookaheadMs,
   sequenceScheduleAheadSeconds, supportedGlobalEffectIds, arpDivisionOptions, arpModeOptions,
+  performanceRecordingMaxSeconds,
 } from './constants'
 import {
   bankIds,
@@ -47,6 +48,7 @@ import { MixerWorkspace } from './components/MixerWorkspace'
 import { SequenceWorkspace } from './components/SequenceWorkspace'
 import { GenerationPanel } from './components/GenerationPanel'
 import { Knob } from './components/Knob'
+import { Tooltip, TooltipProvider } from './components/Tooltip'
 
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false)
@@ -83,6 +85,8 @@ function App() {
   const [isExportingSample, setIsExportingSample] = useState(false)
   const [isExportingSequence, setIsExportingSequence] = useState(false)
   const [sequenceExportMessage, setSequenceExportMessage] = useState('Render all audible banks as a WAV clip with the current FX chain.')
+  const [isPerformanceRecording, setIsPerformanceRecording] = useState(false)
+  const [performanceRecordingElapsed, setPerformanceRecordingElapsed] = useState(0)
   const [isTransformingEditorAudio, setIsTransformingEditorAudio] = useState(false)
   const [isLoopPlaying, setIsLoopPlaying] = useState(false)
   const [isNormalizingLoop, setIsNormalizingLoop] = useState(false)
@@ -146,6 +150,11 @@ function App() {
   const recordedChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<number | null>(null)
   const recordingStartedAtRef = useRef<number | null>(null)
+  const outputLimiterRef = useRef<DynamicsCompressorNode | null>(null)
+  const performanceRecorderRef = useRef<MediaRecorder | null>(null)
+  const performanceChunksRef = useRef<Blob[]>([])
+  const performanceTimerRef = useRef<number | null>(null)
+  const performanceStreamNodeRef = useRef<MediaStreamAudioDestinationNode | null>(null)
   const ephemeralAudioUrlsRef = useRef<Set<string>>(new Set())
   const scheduledMetronomeSourcesRef = useRef<Set<OscillatorNode>>(new Set())
   const sequenceSchedulerRef = useRef<number | null>(null)
@@ -476,7 +485,8 @@ function App() {
   }, [])
 
   useEffect(() => {
-    let unlocked = false
+    let mediaChannelActivated = false
+    let contextUnlocked = false
     // Tiny silent MP3 data URI — forces iOS WebKit to activate the media audio
     // channel instead of the ringer channel. Without this, Web Audio API output
     // is routed through the ringer channel which can be muted on iOS.
@@ -486,34 +496,34 @@ function App() {
       ctx.state === 'suspended' || (ctx.state as string) === 'interrupted'
 
     const unlockAudio = () => {
-      if (unlocked) return
-      const ctx = audioContextRef.current
-      if (!ctx) return
-      if (ctx.state === 'running') {
-        unlocked = true
-        return
-      }
-      if (isContextBlocked(ctx)) {
-        // Don't chain after resume() — it can hang on iOS. Fire both in parallel.
-        ctx.resume().catch(() => {})
+      if (mediaChannelActivated && contextUnlocked) return
 
-        // Play a silent AudioBufferSourceNode
-        const silent = ctx.createBuffer(1, 1, ctx.sampleRate)
-        const src = ctx.createBufferSource()
-        src.buffer = silent
-        src.connect(ctx.destination)
-        src.start()
-
-        // Play a silent HTML <audio> element to force iOS to activate the media
-        // audio channel. This is the key fix: Web Audio alone routes through the
-        // ringer channel on iOS, which can be silent.
+      // Play silent HTML <audio> on the very first user gesture to force iOS to
+      // activate the media audio channel. Must happen independently of whether
+      // the AudioContext exists yet — the context is created lazily on first pad
+      // tap, so by the time it exists the gesture window may have passed.
+      if (!mediaChannelActivated) {
         const audio = new Audio(SILENT_MP3)
         audio.loop = true
         audio.volume = 0.01
         audio.setAttribute('playsinline', '')
         audio.play().catch(() => {})
+        mediaChannelActivated = true
       }
-      unlocked = true
+
+      const ctx = audioContextRef.current
+      if (!ctx) return
+      if (isContextBlocked(ctx)) {
+        // Don't chain after resume() — it can hang on iOS. Fire both in parallel.
+        ctx.resume().catch(() => {})
+
+        const silent = ctx.createBuffer(1, 1, ctx.sampleRate)
+        const src = ctx.createBufferSource()
+        src.buffer = silent
+        src.connect(ctx.destination)
+        src.start()
+      }
+      contextUnlocked = true
     }
     document.addEventListener('touchstart', unlockAudio)
     document.addEventListener('touchend', unlockAudio)
@@ -1165,6 +1175,7 @@ function App() {
       audioContextRef.current = context
       masterEffectInputRef.current = masterEffectInput
       masterGainRef.current = masterGain
+      outputLimiterRef.current = outputLimiter
     }
 
     if (audioContextRef.current.state === 'suspended' || (audioContextRef.current.state as string) === 'interrupted') {
@@ -2451,6 +2462,101 @@ function App() {
     setActivePadIds([])
     setIsLoopPlaying(false)
     setEditorPlayheadFraction(null)
+  }
+
+  const stopPerformanceRecording = () => {
+    const recorder = performanceRecorderRef.current
+    if (!recorder || recorder.state === 'inactive') {
+      return
+    }
+
+    recorder.stop()
+
+    if (performanceTimerRef.current !== null) {
+      clearInterval(performanceTimerRef.current)
+      performanceTimerRef.current = null
+    }
+
+    setIsPerformanceRecording(false)
+    setPerformanceRecordingElapsed(0)
+  }
+
+  const startPerformanceRecording = () => {
+    const context = getAudioContext()
+    if (context.state === 'suspended' || (context.state as string) === 'interrupted') {
+      void context.resume()
+    }
+
+    const limiter = outputLimiterRef.current
+    if (!limiter) {
+      return
+    }
+
+    const streamNode = context.createMediaStreamDestination()
+    limiter.connect(streamNode)
+    performanceStreamNodeRef.current = streamNode
+
+    const mimeType = getPreferredRecordingMimeType()
+    const recorder = new MediaRecorder(streamNode.stream, mimeType ? { mimeType } : undefined)
+    performanceRecorderRef.current = recorder
+    performanceChunksRef.current = []
+
+    recorder.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        performanceChunksRef.current.push(event.data)
+      }
+    }
+
+    recorder.onstop = async () => {
+      const chunks = performanceChunksRef.current
+      performanceChunksRef.current = []
+
+      if (performanceStreamNodeRef.current && limiter) {
+        try { limiter.disconnect(performanceStreamNodeRef.current) } catch { /* already disconnected */ }
+        performanceStreamNodeRef.current = null
+      }
+
+      if (chunks.length === 0) {
+        return
+      }
+
+      const blob = new Blob(chunks, { type: recorder.mimeType })
+
+      try {
+        const arrayBuffer = await blob.arrayBuffer()
+        const audioBuffer = await context.decodeAudioData(arrayBuffer)
+        const wavBlob = encodeWavBlob(audioBuffer)
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        triggerBlobDownload(wavBlob, `performance-${timestamp}.wav`)
+      } catch {
+        // If decoding fails (e.g. Safari mp4), download the raw recording
+        const ext = recorder.mimeType.includes('mp4') ? 'mp4' : 'webm'
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        triggerBlobDownload(blob, `performance-${timestamp}.${ext}`)
+      }
+    }
+
+    recorder.start(1000)
+    setIsPerformanceRecording(true)
+    setPerformanceRecordingElapsed(0)
+
+    const startTime = Date.now()
+    performanceTimerRef.current = window.setInterval(() => {
+      const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
+      setPerformanceRecordingElapsed(elapsedSeconds)
+
+      if (elapsedSeconds >= performanceRecordingMaxSeconds) {
+        stopPerformanceRecording()
+      }
+    }, 1000)
+  }
+
+  const togglePerformanceRecording = () => {
+    if (isPerformanceRecording) {
+      stopPerformanceRecording()
+    } else {
+      startPerformanceRecording()
+    }
   }
 
   const scheduleSequenceStep = useEffectEvent((stepIndex: number, when: number) => {
@@ -4156,6 +4262,7 @@ function App() {
             : 'Workspace'
 
   return (
+    <TooltipProvider>
     <main className="app-shell">
       {isLoadingShare && (
         <div className="share-loading-overlay">
@@ -4266,6 +4373,21 @@ function App() {
             >
               <Square size={21} strokeWidth={2.1} aria-hidden="true" />
             </button>
+            <Tooltip label={isPerformanceRecording ? 'Stop and save recording' : 'Record everything you hear as a WAV file'} side="bottom">
+              <button
+                type="button"
+                className={isPerformanceRecording ? 'primary-button transport-button is-active performance-recording' : 'secondary-button transport-button'}
+                onClick={togglePerformanceRecording}
+                aria-label={isPerformanceRecording ? 'Stop recording performance' : 'Record performance'}
+              >
+                <Disc size={18} strokeWidth={2.1} aria-hidden="true" />
+              </button>
+            </Tooltip>
+            {isPerformanceRecording && (
+              <span className="performance-recording-timer">
+                {formatClockDuration(performanceRecordingElapsed)}
+              </span>
+            )}
           </div>
           <div className="work-area-tabs" role="tablist" aria-label="Work views">
             <button type="button" className={workView === 'editor' ? 'work-tab is-current' : 'work-tab'} onClick={() => toggleWorkView('editor')}>
@@ -5004,6 +5126,7 @@ function App() {
 
       <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
     </main>
+    </TooltipProvider>
   )
 }
 

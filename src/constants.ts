@@ -93,3 +93,5 @@ export const preferredRecordingMimeTypes = [
   'audio/mp4',
   'audio/ogg;codecs=opus',
 ] as const
+
+export const performanceRecordingMaxSeconds = 600
