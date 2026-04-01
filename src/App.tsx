@@ -115,9 +115,11 @@ function App() {
   const [isMidiPanelOpen, setIsMidiPanelOpen] = useState(false)
   const [bankSnapshots, setBankSnapshots] = useState<BankSnapshot[]>([])
   const [openBankPopover, setOpenBankPopover] = useState<BankId | null>(null)
+  const isDebugMode = new URLSearchParams(window.location.search).has('debug')
   const [audioDebug, setAudioDebug] = useState<string[]>([])
   const audioDebugRef = useRef<string[]>([])
   const pushDebug = (msg: string) => {
+    if (!isDebugMode) return
     const line = `[${new Date().toLocaleTimeString()}] ${msg}`
     audioDebugRef.current = [...audioDebugRef.current.slice(-8), line]
     setAudioDebug(audioDebugRef.current)
@@ -4288,7 +4290,7 @@ function App() {
   return (
     <TooltipProvider>
     <main className="app-shell">
-      {audioDebug.length > 0 && (
+      {isDebugMode && audioDebug.length > 0 && (
         <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 99999, background: 'rgba(0,0,0,0.85)', color: '#0f0', fontSize: '10px', fontFamily: 'monospace', padding: '6px 8px', maxHeight: '30vh', overflow: 'auto', pointerEvents: 'auto' }}>
           <button type="button" onClick={() => { audioDebugRef.current = []; setAudioDebug([]) }} style={{ float: 'right', color: '#f00', background: 'none', border: 'none', fontSize: '10px', fontFamily: 'monospace' }}>clear</button>
           {audioDebug.map((line, i) => <div key={i}>{line}</div>)}
