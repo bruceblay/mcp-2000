@@ -32,7 +32,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   }, [isOpen, mounted])
 
   useEffect(() => {
-    if (isOpen && inputRef.current) {
+    if (isOpen && inputRef.current && !matchMedia('(pointer: coarse)').matches) {
       inputRef.current.focus()
     }
   }, [isOpen])
