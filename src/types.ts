@@ -59,6 +59,14 @@ export type BitcrusherProcessorNode = ScriptProcessorNode & {
   _updateSettings?: (bits: number, normalRange: number) => void
 }
 
+export type LoopChopProcessorNode = ScriptProcessorNode & {
+  _updateSettings?: (loopSize: number, stutterRate: number) => void
+}
+
+export type TapeStopProcessorNode = ScriptProcessorNode & {
+  _updateSettings?: (stopTime: number, restartTime: number, mode: number) => void
+}
+
 export type ActiveEffectRuntime = {
   effectId: string
   refs: Record<string, unknown>

@@ -11,7 +11,7 @@ export const bitcrusherConfig: EffectConfig = {
       min: 1,
       max: 16,
       step: 1,
-      default: 8,
+      default: 4,
       unit: 'bits'
     },
     {
@@ -29,14 +29,14 @@ export const bitcrusherConfig: EffectConfig = {
       min: 0,
       max: 1,
       step: 0.01,
-      default: 0.5,
+      default: 1.0,
       unit: '%'
     }
   ],
   defaultValues: {
-    bits: 8,
+    bits: 4,
     normalRange: 0.4,
-    wet: 0.5
+    wet: 1.0
   },
   sliderColor: '#E74C3C' // Red for digital/lo-fi
 }

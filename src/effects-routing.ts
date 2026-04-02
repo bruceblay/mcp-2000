@@ -1,5 +1,5 @@
 import type { GlobalEffectRoutingOptions, GlobalEffectRoutingResult } from './types'
-import { clamp, buildDistortionCurve, buildImpulseResponse, createBitcrusherNode, getSubdivisionSeconds, getLoopChopRate, getLfoWaveform } from './audio-utils'
+import { clamp, buildDistortionCurve, buildImpulseResponse, createBitcrusherNode, createLoopChopNode, createTapeStopNode, getSubdivisionSeconds, getLfoWaveform } from './audio-utils'
 
 export const createGlobalEffectRouting = ({
   context,
@@ -153,7 +153,7 @@ export const createGlobalEffectRouting = ({
     runtimeRefs.shaper = shaper
     runtimeRefs.toneFilter = toneFilter
   } else if (effectId === 'bitcrusher') {
-    const crusher = createBitcrusherNode(context, effectParams.bits ?? 8, effectParams.normalRange ?? 0.4)
+    const crusher = createBitcrusherNode(context, effectParams.bits ?? 4, effectParams.normalRange ?? 0.4)
 
     effectInput.connect(crusher)
     finishWetChain(crusher)
@@ -347,22 +347,25 @@ export const createGlobalEffectRouting = ({
     runtimeRefs.carrier = carrier
     runtimeRefs.carrierGain = carrierGain
     runtimeRefs.ringGain = ringGain
-  } else if (effectId === 'tremolo' || effectId === 'sidechainpump' || effectId === 'loopchop') {
+  } else if (effectId === 'loopchop') {
+    const processor = createLoopChopNode(context, effectParams.loopSize ?? 2, effectParams.stutterRate ?? 4)
+
+    effectInput.connect(processor)
+    finishWetChain(processor)
+    cleanupNodes.push(processor)
+    runtimeRefs.processor = processor
+  } else if (effectId === 'tremolo' || effectId === 'sidechainpump') {
     const modGain = context.createGain()
     const lfo = context.createOscillator()
     const lfoGain = context.createGain()
     const offset = context.createConstantSource()
-    const depth = effectId === 'loopchop'
-      ? clamp(effectParams.wet ?? 0.8, 0, 1)
-      : clamp(effectParams.depth ?? 0.8, 0, 1)
+    const depth = clamp(effectParams.depth ?? 0.8, 0, 1)
     const rate = effectId === 'tremolo'
       ? clamp(effectParams.rate ?? 6, 0.1, 20)
-      : effectId === 'sidechainpump'
-        ? clamp(0.75 + (effectParams.sensitivity ?? 0.1) * 12, 0.5, 8)
-        : getLoopChopRate(effectParams.loopSize ?? 2, effectParams.stutterRate ?? 4)
+      : clamp(0.75 + (effectParams.sensitivity ?? 0.1) * 12, 0.5, 8)
 
     modGain.gain.value = 1 - depth / 2
-    lfo.type = effectId === 'loopchop' ? 'square' : effectId === 'sidechainpump' ? 'sawtooth' : 'sine'
+    lfo.type = effectId === 'sidechainpump' ? 'sawtooth' : 'sine'
     lfo.frequency.value = rate
     lfoGain.gain.value = depth / 2
     offset.offset.value = 1 - depth / 2
@@ -381,30 +384,12 @@ export const createGlobalEffectRouting = ({
     runtimeRefs.lfo = lfo
     runtimeRefs.lfoGain = lfoGain
   } else if (effectId === 'tapestop') {
-    const delay = context.createDelay(0.2)
-    const lowpass = context.createBiquadFilter()
-    const lfo = context.createOscillator()
-    const lfoGain = context.createGain()
-    const modeRate = [0.12, 0.2, 0.35][Math.max(0, Math.min(2, Math.round(effectParams.mode ?? 2)))] ?? 0.35
+    const processor = createTapeStopNode(context, effectParams.stopTime ?? 1, effectParams.restartTime ?? 0.5, effectParams.mode ?? 2)
 
-    delay.delayTime.value = 0.02 + clamp(effectParams.stopTime ?? 1, 0.1, 3) * 0.015
-    lowpass.type = 'lowpass'
-    lowpass.frequency.value = 1800 + clamp(effectParams.restartTime ?? 0.5, 0.1, 3) * 1800
-    lfo.type = 'sawtooth'
-    lfo.frequency.value = modeRate
-    lfoGain.gain.value = 0.03
-
-    effectInput.connect(delay)
-    delay.connect(lowpass)
-    finishWetChain(lowpass)
-    lfo.connect(lfoGain)
-    lfoGain.connect(delay.delayTime)
-    startSource(lfo)
-    cleanupNodes.push(delay, lowpass, lfoGain, lfo)
-    runtimeRefs.delay = delay
-    runtimeRefs.lowpass = lowpass
-    runtimeRefs.lfo = lfo
-    runtimeRefs.lfoGain = lfoGain
+    effectInput.connect(processor)
+    finishWetChain(processor)
+    cleanupNodes.push(processor)
+    runtimeRefs.processor = processor
   } else if (effectId === 'lofitape') {
     const shaper = context.createWaveShaper()
     const tone = context.createBiquadFilter()

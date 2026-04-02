@@ -1,4 +1,4 @@
-import type { WebAudioContext, BitcrusherProcessorNode, PadPlaybackSetting, ChopRegion, GeneratedLoop } from './types'
+import type { WebAudioContext, BitcrusherProcessorNode, LoopChopProcessorNode, TapeStopProcessorNode, PadPlaybackSetting, ChopRegion, GeneratedLoop } from './types'
 
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
@@ -35,9 +35,9 @@ export const buildImpulseResponse = (context: WebAudioContext, roomSize: number,
 
 export const createBitcrusherNode = (context: WebAudioContext, bits: number, normalRange: number) => {
   const processor = context.createScriptProcessor(4096, 2, 2) as BitcrusherProcessorNode
-  let step = Math.pow(0.5, Math.max(1, Math.round(bits)))
-  let sampleHold = Math.max(0.01, normalRange)
-  let phase = 0
+  let step = Math.pow(2, Math.max(1, Math.round(bits)) - 1)
+  let sampleRateReduction = Math.floor(normalRange * 32) + 1
+  let sampleCounter = 0
   let lastLeft = 0
   let lastRight = 0
 
@@ -48,21 +48,220 @@ export const createBitcrusherNode = (context: WebAudioContext, bits: number, nor
     const outputRight = event.outputBuffer.numberOfChannels > 1 ? event.outputBuffer.getChannelData(1) : outputLeft
 
     for (let index = 0; index < inputLeft.length; index += 1) {
-      phase += sampleHold
-      if (phase >= 1) {
-        phase -= 1
-        lastLeft = step * Math.floor(inputLeft[index] / step + 0.5)
-        lastRight = step * Math.floor(inputRight[index] / step + 0.5)
+      if (sampleCounter % sampleRateReduction === 0) {
+        lastLeft = inputLeft[index]
+        lastRight = inputRight[index]
       }
+      sampleCounter += 1
 
-      outputLeft[index] = lastLeft
-      outputRight[index] = lastRight
+      outputLeft[index] = Math.round(lastLeft * step) / step
+      outputRight[index] = Math.round(lastRight * step) / step
     }
   }
 
   processor._updateSettings = (nextBits, nextNormalRange) => {
-    step = Math.pow(0.5, Math.max(1, Math.round(nextBits)))
-    sampleHold = Math.max(0.01, nextNormalRange)
+    step = Math.pow(2, Math.max(1, Math.round(nextBits)) - 1)
+    sampleRateReduction = Math.floor(nextNormalRange * 32) + 1
+  }
+
+  return processor
+}
+
+export const createLoopChopNode = (context: WebAudioContext, loopSize: number, stutterRate: number) => {
+  const processor = context.createScriptProcessor(4096, 2, 2) as LoopChopProcessorNode
+
+  const loopSizes = [0.125, 0.25, 0.5, 1.0, 2.0]
+  const beatLength = 60 / 120
+
+  let loopSizeIndex = Math.max(0, Math.min(4, Math.round(loopSize)))
+  let bufferSize = Math.floor(beatLength * (loopSizes[loopSizeIndex] ?? 0.5) * context.sampleRate)
+  let maxStutters = Math.max(1, Math.floor(stutterRate))
+
+  let captureBufferL = new Float32Array(bufferSize)
+  let captureBufferR = new Float32Array(bufferSize)
+  let playbackBufferL = new Float32Array(bufferSize)
+  let playbackBufferR = new Float32Array(bufferSize)
+  let captureIndex = 0
+  let playbackIndex = 0
+  let isCapturing = true
+  let captureComplete = false
+  let stutterCount = 0
+
+  processor.onaudioprocess = (event) => {
+    const inputLeft = event.inputBuffer.getChannelData(0)
+    const inputRight = event.inputBuffer.numberOfChannels > 1 ? event.inputBuffer.getChannelData(1) : inputLeft
+    const outputLeft = event.outputBuffer.getChannelData(0)
+    const outputRight = event.outputBuffer.numberOfChannels > 1 ? event.outputBuffer.getChannelData(1) : outputLeft
+
+    for (let index = 0; index < inputLeft.length; index += 1) {
+      if (isCapturing && !captureComplete) {
+        captureBufferL[captureIndex] = inputLeft[index]
+        captureBufferR[captureIndex] = inputRight[index]
+        captureIndex += 1
+
+        if (captureIndex >= bufferSize) {
+          playbackBufferL = new Float32Array(captureBufferL)
+          playbackBufferR = new Float32Array(captureBufferR)
+          captureComplete = true
+          isCapturing = false
+          playbackIndex = 0
+          stutterCount = 0
+        }
+
+        outputLeft[index] = inputLeft[index]
+        outputRight[index] = inputRight[index]
+      } else if (captureComplete) {
+        outputLeft[index] = playbackBufferL[playbackIndex]
+        outputRight[index] = playbackBufferR[playbackIndex]
+        playbackIndex += 1
+
+        if (playbackIndex >= bufferSize) {
+          stutterCount += 1
+          playbackIndex = 0
+
+          if (stutterCount >= maxStutters) {
+            isCapturing = true
+            captureComplete = false
+            captureIndex = 0
+            stutterCount = 0
+          }
+        }
+      } else {
+        outputLeft[index] = inputLeft[index]
+        outputRight[index] = inputRight[index]
+      }
+    }
+  }
+
+  processor._updateSettings = (nextLoopSize, nextStutterRate) => {
+    const nextIndex = Math.max(0, Math.min(4, Math.round(nextLoopSize)))
+    const nextBufferSize = Math.floor(beatLength * (loopSizes[nextIndex] ?? 0.5) * context.sampleRate)
+    maxStutters = Math.max(1, Math.floor(nextStutterRate))
+
+    if (nextBufferSize !== bufferSize) {
+      bufferSize = nextBufferSize
+      loopSizeIndex = nextIndex
+      captureBufferL = new Float32Array(bufferSize)
+      captureBufferR = new Float32Array(bufferSize)
+      playbackBufferL = new Float32Array(bufferSize)
+      playbackBufferR = new Float32Array(bufferSize)
+      isCapturing = true
+      captureComplete = false
+      captureIndex = 0
+      playbackIndex = 0
+      stutterCount = 0
+    }
+  }
+
+  return processor
+}
+
+export const createTapeStopNode = (context: WebAudioContext, stopTime: number, restartTime: number, mode: number) => {
+  const processor = context.createScriptProcessor(4096, 2, 2) as TapeStopProcessorNode
+
+  const bufferLength = context.sampleRate * 2
+  const bufferL = new Float32Array(bufferLength)
+  const bufferR = new Float32Array(bufferLength)
+  let writeIndex = 0
+  let readPosition = 0.0
+  let playbackRate = 1.0
+  let phase: 'stopping' | 'stopped' | 'restarting' | 'playing' = 'stopping'
+  let phaseTimer = 0
+  let phaseDuration = 0
+
+  let currentStopTime = Math.max(0.1, stopTime)
+  let currentRestartTime = Math.max(0.1, restartTime)
+  let currentMode = Math.max(0, Math.min(2, Math.round(mode)))
+
+  const startStop = () => {
+    phase = 'stopping'
+    phaseTimer = 0
+    phaseDuration = Math.floor(currentStopTime * context.sampleRate)
+    playbackRate = 1.0
+  }
+
+  const startRestart = () => {
+    phase = 'restarting'
+    phaseTimer = 0
+    phaseDuration = Math.floor(currentRestartTime * context.sampleRate)
+    playbackRate = 0.0
+  }
+
+  const startPlaying = () => {
+    phase = 'playing'
+    phaseTimer = 0
+    phaseDuration = Math.floor(0.5 * context.sampleRate)
+    playbackRate = 1.0
+  }
+
+  startStop()
+
+  processor.onaudioprocess = (event) => {
+    const inputLeft = event.inputBuffer.getChannelData(0)
+    const inputRight = event.inputBuffer.numberOfChannels > 1 ? event.inputBuffer.getChannelData(1) : inputLeft
+    const outputLeft = event.outputBuffer.getChannelData(0)
+    const outputRight = event.outputBuffer.numberOfChannels > 1 ? event.outputBuffer.getChannelData(1) : outputLeft
+
+    const stopSamples = Math.floor(currentStopTime * context.sampleRate)
+    const restartSamples = Math.floor(currentRestartTime * context.sampleRate)
+
+    for (let index = 0; index < inputLeft.length; index += 1) {
+      bufferL[writeIndex] = inputLeft[index]
+      bufferR[writeIndex] = inputRight[index]
+      writeIndex = (writeIndex + 1) % bufferLength
+
+      phaseTimer += 1
+
+      if (phase === 'stopping') {
+        const progress = Math.min(phaseTimer / stopSamples, 1.0)
+        playbackRate = Math.max(0, 1.0 - Math.pow(progress, 1.5))
+
+        if (progress >= 1.0) {
+          playbackRate = 0.0
+          if (currentMode === 0) {
+            phase = 'stopped'
+          } else {
+            startRestart()
+          }
+        }
+      } else if (phase === 'restarting') {
+        const progress = Math.min(phaseTimer / restartSamples, 1.0)
+        playbackRate = Math.pow(progress, 1.5)
+
+        if (progress >= 1.0) {
+          playbackRate = 1.0
+          if (currentMode === 2) {
+            startPlaying()
+          } else {
+            phase = 'playing'
+            phaseDuration = Infinity
+          }
+        }
+      } else if (phase === 'playing' && currentMode === 2) {
+        if (phaseTimer >= phaseDuration) {
+          startStop()
+        }
+      }
+
+      if (playbackRate > 0.001) {
+        readPosition = (readPosition + playbackRate) % bufferLength
+        const idx = Math.floor(readPosition)
+        const frac = readPosition - idx
+        const nextIdx = (idx + 1) % bufferLength
+
+        outputLeft[index] = bufferL[idx] * (1 - frac) + bufferL[nextIdx] * frac
+        outputRight[index] = bufferR[idx] * (1 - frac) + bufferR[nextIdx] * frac
+      } else {
+        outputLeft[index] = 0
+        outputRight[index] = 0
+      }
+    }
+  }
+
+  processor._updateSettings = (nextStopTime, nextRestartTime, nextMode) => {
+    currentStopTime = Math.max(0.1, nextStopTime)
+    currentRestartTime = Math.max(0.1, nextRestartTime)
+    currentMode = Math.max(0, Math.min(2, Math.round(nextMode)))
   }
 
   return processor

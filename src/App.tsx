@@ -17,7 +17,7 @@ import {
   bankIds,
   type BankId, type EngineStatus, type GenerationStatus, type GenerationMode, type SequenceGenerationAction,
   type MicCaptureState, type WorkView, type EditorSource, type PlaybackMode, type RecordedTake, type GeneratedLoop,
-  type EditorTransformResponse, type ChopRegion, type BitcrusherProcessorNode, type ActiveEffectRuntime,
+  type EditorTransformResponse, type ChopRegion, type BitcrusherProcessorNode, type LoopChopProcessorNode, type TapeStopProcessorNode, type ActiveEffectRuntime,
   type ActivePadAudio, type ActiveChromaticNoteAudio, type ActiveLoopPlayback, type MidiPadNoteMappings,
   type NavigatorWithMidi, type PadPlaybackSetting, type BankState, type Sequence,
   type ArpMode, type ArpDivision, type EffectChainState, type EffectChainSlotId, effectChainSlotIds,
@@ -26,7 +26,7 @@ import {
 import {
   clamp, buildDistortionCurve, buildImpulseResponse, createReversedBuffer,
   getPadPlaybackWindow, encodeWavBlob, sanitizeDownloadName, triggerBlobDownload,
-  getSubdivisionSeconds, getLoopChopRate, getEffectTailPaddingSeconds,
+  getSubdivisionSeconds, getEffectTailPaddingSeconds,
   getLoopDurationSeconds, buildChopRegions, normalizeChopRegions,
   loadAudioDurationFromUrl, base64ToBlob, blobToBase64, getLfoWaveform,
   getPreferredRecordingMimeType, getRecordingFileExtension,
@@ -139,6 +139,7 @@ function App() {
   const reversedBufferMapRef = useRef<Map<string, AudioBuffer>>(new Map())
   const loadPromiseRef = useRef<Promise<void> | null>(null)
   const activePadSourcesRef = useRef<Map<string, ActivePadAudio>>(new Map())
+  const activeSequenceVoicesRef = useRef<Set<AudioBufferSourceNode>>(new Set())
   const activeChromaticNotesRef = useRef<Map<string, ActiveChromaticNoteAudio>>(new Map())
   const pressedChromaticKeysRef = useRef<Map<string, string>>(new Map())
   const arpIntervalRef = useRef<number | null>(null)
@@ -908,8 +909,8 @@ function App() {
 
       if (state.effectId === 'bitcrusher') {
         const crusher = refs.crusher as BitcrusherProcessorNode | undefined
-        if (crusher?._updateSettings && (didChange('bits', 8) || didChange('normalRange', 0.4))) {
-          crusher._updateSettings(state.params.bits ?? 8, state.params.normalRange ?? 0.4)
+        if (crusher?._updateSettings && (didChange('bits', 4) || didChange('normalRange', 0.4))) {
+          crusher._updateSettings(state.params.bits ?? 4, state.params.normalRange ?? 0.4)
         }
         continue
       }
@@ -1068,7 +1069,15 @@ function App() {
         continue
       }
 
-      if (state.effectId === 'tremolo' || state.effectId === 'sidechainpump' || state.effectId === 'loopchop') {
+      if (state.effectId === 'loopchop') {
+        const processor = refs.processor as LoopChopProcessorNode | undefined
+        if (processor?._updateSettings && (didChange('loopSize', 2) || didChange('stutterRate', 4))) {
+          processor._updateSettings(state.params.loopSize ?? 2, state.params.stutterRate ?? 4)
+        }
+        continue
+      }
+
+      if (state.effectId === 'tremolo' || state.effectId === 'sidechainpump') {
         const lfo = refs.lfo as OscillatorNode | undefined
         const lfoGain = refs.lfoGain as GainNode | undefined
         const offset = refs.offset as ConstantSourceNode | undefined
@@ -1076,24 +1085,15 @@ function App() {
           continue
         }
 
-        const depth = state.effectId === 'loopchop'
-          ? clamp(state.params.wet ?? 0.8, 0, 1)
-          : clamp(state.params.depth ?? 0.8, 0, 1)
+        const depth = clamp(state.params.depth ?? 0.8, 0, 1)
         const rate = state.effectId === 'tremolo'
           ? clamp(state.params.rate ?? 6, 0.1, 20)
-          : state.effectId === 'sidechainpump'
-            ? clamp(0.75 + (state.params.sensitivity ?? 0.1) * 12, 0.5, 8)
-            : getLoopChopRate(state.params.loopSize ?? 2, state.params.stutterRate ?? 4)
+          : clamp(0.75 + (state.params.sensitivity ?? 0.1) * 12, 0.5, 8)
 
-        if (
-          didChange('rate', 6) ||
-          didChange('sensitivity', 0.1) ||
-          didChange('loopSize', 2) ||
-          didChange('stutterRate', 4)
-        ) {
+        if (didChange('rate', 6) || didChange('sensitivity', 0.1)) {
           smoothEffectParam(lfo.frequency, rate, 0.02)
         }
-        if (state.effectId === 'loopchop' ? didChange('wet', 0.8) : didChange('depth', 0.8)) {
+        if (didChange('depth', 0.8)) {
           smoothEffectParam(lfoGain.gain, depth / 2, 0.02, 'linear')
           smoothEffectParam(offset.offset, 1 - depth / 2, 0.02, 'linear')
         }
@@ -1101,18 +1101,9 @@ function App() {
       }
 
       if (state.effectId === 'tapestop') {
-        const delay = refs.delay as DelayNode | undefined
-        const lowpass = refs.lowpass as BiquadFilterNode | undefined
-        const lfo = refs.lfo as OscillatorNode | undefined
-        if (delay && didChange('stopTime', 1)) {
-          smoothEffectParam(delay.delayTime, 0.02 + clamp(state.params.stopTime ?? 1, 0.1, 3) * 0.015, 0.04, 'linear')
-        }
-        if (lowpass && didChange('restartTime', 0.5)) {
-          smoothEffectParam(lowpass.frequency, 1800 + clamp(state.params.restartTime ?? 0.5, 0.1, 3) * 1800, 0.04)
-        }
-        if (lfo && didChange('mode', 2)) {
-          const modeRate = [0.12, 0.2, 0.35][Math.max(0, Math.min(2, Math.round(state.params.mode ?? 2)))] ?? 0.35
-          smoothEffectParam(lfo.frequency, modeRate, 0.04)
+        const processor = refs.processor as TapeStopProcessorNode | undefined
+        if (processor?._updateSettings && (didChange('stopTime', 1) || didChange('restartTime', 0.5) || didChange('mode', 2))) {
+          processor._updateSettings(state.params.stopTime ?? 1, state.params.restartTime ?? 0.5, state.params.mode ?? 2)
         }
         continue
       }
@@ -2213,8 +2204,8 @@ function App() {
       return
     }
 
-    // Retrigger: stop any existing source for this pad
-    if (activePadSourcesRef.current.has(padId)) {
+    // Retrigger: stop any existing source for this pad (manual play only — sequence voices overlap for polyphony)
+    if (!fromSequence && activePadSourcesRef.current.has(padId)) {
       stopPadSource(padId)
     }
 
@@ -2246,14 +2237,18 @@ function App() {
     }
 
     // Track source for retrigger and cleanup
-    activePadSourcesRef.current.set(padId, { source, gainNode, pannerNode })
-    if (isLoopingMode && !fromSequence) {
-      setActivePadIds((current) => (current.includes(padId) ? current : current.concat(padId)))
-    }
-
-    source.onended = () => {
-      activePadSourcesRef.current.delete(padId)
-      if (!fromSequence) {
+    if (fromSequence) {
+      activeSequenceVoicesRef.current.add(source)
+      source.onended = () => {
+        activeSequenceVoicesRef.current.delete(source)
+      }
+    } else {
+      activePadSourcesRef.current.set(padId, { source, gainNode, pannerNode })
+      if (isLoopingMode) {
+        setActivePadIds((current) => (current.includes(padId) ? current : current.concat(padId)))
+      }
+      source.onended = () => {
+        activePadSourcesRef.current.delete(padId)
         setActivePadIds((current) => current.filter((currentPadId) => currentPadId !== padId))
         clearPadPlayhead(padId)
       }
@@ -2281,7 +2276,7 @@ function App() {
       )
     }
 
-    if (playbackMode === 'gate') {
+    if (!fromSequence && playbackMode === 'gate') {
       activePadSourcesRef.current.set(padId, { source, gainNode, pannerNode })
     }
   })
@@ -3439,10 +3434,20 @@ function App() {
     }
   }
 
+  const stopAllSequenceVoices = () => {
+    for (const source of activeSequenceVoicesRef.current) {
+      try {
+        source.stop()
+      } catch {}
+    }
+    activeSequenceVoicesRef.current.clear()
+  }
+
   const stopAllPadSources = () => {
     for (const padId of activePadSourcesRef.current.keys()) {
       stopPadSource(padId)
     }
+    stopAllSequenceVoices()
   }
 
   const updatePlaybackMode = (padId: string, nextMode: PlaybackMode) => {
