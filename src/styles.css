@@ -3446,6 +3446,23 @@ button:active:not(:disabled) {
   }
 }
 
+.app-footer {
+  text-align: center;
+  padding: 1.25rem 1rem;
+  font-size: 0.72rem;
+  color: #888;
+  letter-spacing: 0.02em;
+}
+
+.app-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  text-decoration: underline;
+}
+
 /* Prevent iOS auto-zoom on input focus (triggers below 16px) */
 @media (pointer: coarse) {
   .prompt-field textarea,
@@ -3565,6 +3582,10 @@ button:active:not(:disabled) {
 
 [data-theme="dark"] .performance-recording-timer {
   color: #e05555;
+}
+
+[data-theme="dark"] .app-footer {
+  color: #6a7ea0;
 }
 
 :root {
