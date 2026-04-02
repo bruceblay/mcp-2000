@@ -79,13 +79,13 @@ button:active:not(:disabled) {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .app-shell {
   width: min(calc(100% - 2rem), var(--page-max-width));
   margin: 0 auto;
-  padding: 1rem 0 2rem;
+  padding: 1rem 0 0;
 }
 
 .eyebrow,
