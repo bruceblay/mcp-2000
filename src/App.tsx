@@ -5159,7 +5159,7 @@ function App() {
       <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
 
       <footer className="app-footer">
-        Built by <a href="https://coolbrb.com" target="_blank" rel="noopener noreferrer">Bruce Blay</a> · <a href="https://github.com/bruceblay" target="_blank" rel="noopener noreferrer">GitHub</a>
+        Built by <a href="https://coolbrb.com" target="_blank" rel="noopener noreferrer">Bruce Blay</a> · <a href="https://github.com/bruceblay" target="_blank" rel="noopener noreferrer">GitHub</a> · <a href="https://meltingseason.bandcamp.com/album/curl" target="_blank" rel="noopener noreferrer">Bandcamp</a>
       </footer>
     </main>
     </TooltipProvider>
