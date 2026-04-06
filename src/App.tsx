@@ -90,7 +90,7 @@ function App() {
   const [isNormalizingLoop, setIsNormalizingLoop] = useState(false)
   const [, setLoopDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
   const [, setSelectedPadDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
-  const [sequenceTempo, setSequenceTempo] = useState(94)
+  const [sequenceTempo, setSequenceTempo] = useState(112)
   const [isMetronomeEnabled, setIsMetronomeEnabled] = useState(false)
   const [isChromaticModeActive, setIsChromaticModeActive] = useState(false)
   const [chromaticOctave, setChromaticOctave] = useState(chromaticBaseOctave)
@@ -2170,11 +2170,15 @@ function App() {
     source.stop(when + 0.06)
   })
 
+  const getSyncBuffer = (pad: Pad, reversed: boolean): AudioBuffer | undefined => {
+    const buf = bufferMapRef.current.get(pad.sampleUrl)
+    if (!buf) return undefined
+    if (!reversed) return buf
+    return reversedBufferMapRef.current.get(pad.sampleUrl)
+  }
+
   const playPadAudio = useEffectEvent(async (padId: string, options?: { when?: number; fromSequence?: boolean; bankId?: BankId; sequenceSemitoneOffset?: number; sequenceGateDuration?: number }) => {
     pushDebug('playPad: ' + padId)
-    await ensureAudioEngine()
-    pushDebug('playPad: engine ready')
-
     const context = audioContextRef.current
     const scheduledWhen = options?.when
     const fromSequence = options?.fromSequence ?? false
@@ -2183,7 +2187,14 @@ function App() {
     const targetBankState = bankStatesRef.current[targetBankId]
     const currentPad = targetBankState?.pads.find((pad) => pad.id === padId)
     const playbackSettings = targetBankState?.playbackSettings[padId]
-    const sampleBuffer = currentPad && playbackSettings ? await getPlaybackBuffer(currentPad, playbackSettings.reversed) : undefined
+
+    // Fast synchronous path: skip async hops when engine is warm and buffer is cached
+    let sampleBuffer = currentPad && playbackSettings ? getSyncBuffer(currentPad, playbackSettings.reversed) : undefined
+    if (!context || !sampleBuffer) {
+      await ensureAudioEngine()
+      pushDebug('playPad: engine ready')
+      sampleBuffer = currentPad && playbackSettings ? await getPlaybackBuffer(currentPad, playbackSettings.reversed) : undefined
+    }
 
     const bankGainNode = bankGainNodesRef.current[targetBankId]
 
