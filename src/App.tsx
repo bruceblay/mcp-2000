@@ -1,4 +1,4 @@
-import { startTransition, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import { lazy, startTransition, Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Circle, Disc, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import JSZip from 'jszip'
@@ -42,7 +42,7 @@ import {
 import { createGlobalEffectRouting } from './effects-routing'
 import { type DeserializedProject } from './project-snapshot'
 import { useShare } from './use-share'
-import { ChatPanel } from './components/ChatPanel'
+const ChatPanel = lazy(() => import('./components/ChatPanel').then(m => ({ default: m.ChatPanel })))
 import { EffectsWorkspace } from './components/EffectsWorkspace'
 import { MixerWorkspace } from './components/MixerWorkspace'
 import { SequenceWorkspace } from './components/SequenceWorkspace'
@@ -115,6 +115,7 @@ function App() {
   const [isMidiPanelOpen, setIsMidiPanelOpen] = useState(false)
   const [bankSnapshots, setBankSnapshots] = useState<BankSnapshot[]>([])
   const [openBankPopover, setOpenBankPopover] = useState<BankId | null>(null)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const isDebugMode = new URLSearchParams(window.location.search).has('debug')
   const [audioDebug, setAudioDebug] = useState<string[]>([])
   const audioDebugRef = useRef<string[]>([])
@@ -1714,15 +1715,15 @@ function App() {
           const wavBlob = encodeWavBlob(exportBuffer)
           const fileName = `${pad.label.replace(/\s+/g, '-')}_${sanitizeDownloadName(pad.sampleName)}.wav`
           zip.file(fileName, wavBlob)
-        } catch {
-          // skip pads that fail to decode
+        } catch (error) {
+          console.warn(`Skipped pad "${pad.label}" during kit export:`, error)
         }
       }
 
       const zipBlob = await zip.generateAsync({ type: 'blob' })
       triggerBlobDownload(zipBlob, `${bankLabel}-Kit.zip`)
-    } catch {
-      // export failed silently
+    } catch (error) {
+      console.error('Kit export failed:', error)
     } finally {
       setIsExportingKit(false)
     }
@@ -4309,6 +4310,23 @@ function App() {
           </div>
         </div>
       )}
+      {showOnboarding && (
+        <div className="onboarding-overlay" onClick={() => { localStorage.setItem('mcp2000:onboarded', '1'); setShowOnboarding(false) }}>
+          <div className="onboarding-lcd" onClick={(e) => e.stopPropagation()}>
+            <p className="onboarding-brand">MCP 2000</p>
+            <ul className="onboarding-steps">
+              <li><strong>Play pads</strong> with your keyboard, mouse, or MIDI controller</li>
+              <li><strong>Record a sequence</strong> by playing live or programming the step sequencer</li>
+              <li><strong>Generate sounds</strong> — describe a kit or loop and AI builds the samples</li>
+              <li><strong>Record your performance</strong> and export it as a WAV file</li>
+            </ul>
+            <p className="onboarding-hint">Need help? Open the <button type="button" className="onboarding-link" onClick={() => { localStorage.setItem('mcp2000:onboarded', '1'); setShowOnboarding(false); setIsChatOpen(true) }}>chat panel</button> anytime.</p>
+            <button type="button" className="onboarding-dismiss" onClick={() => { localStorage.setItem('mcp2000:onboarded', '1'); setShowOnboarding(false) }}>
+              Start Making Beats
+            </button>
+          </div>
+        </div>
+      )}
       <header className="work-area" aria-label="Sampler work area">
         <div className="work-area-toolbar">
           <div className="work-area-title">
@@ -5161,7 +5179,9 @@ function App() {
 
       </section>
 
-      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <Suspense fallback={null}>
+        <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      </Suspense>
 
       <footer className="app-footer">
         Built by Bruce Blay · <a href="https://github.com/bruceblay" target="_blank" rel="noopener noreferrer">GitHub</a> · <a href="https://meltingseason.bandcamp.com/album/curl" target="_blank" rel="noopener noreferrer">Bandcamp</a>
