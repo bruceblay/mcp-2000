@@ -1,6 +1,5 @@
 import { lazy, startTransition, Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Circle, Disc, Download, Metronome, Piano, Play, Square } from 'lucide-react'
-import { AnimatePresence, motion } from 'framer-motion'
 import { type Pad } from './mock-kit'
 import { SampleWaveform } from './components/sample-waveform'
 import { ScrollPicker } from './components/ScrollPicker'
@@ -4261,26 +4260,6 @@ function App() {
     })
   }
 
-  const workSurfaceVariants = {
-    initial: (direction: 'up' | 'down' | 'collapse' | 'expand') => {
-      if (direction === 'expand' || direction === 'collapse') {
-        return { height: 0, opacity: 0 }
-      }
-      return { y: direction === 'down' ? 30 : -30, opacity: 0, height: 'auto' }
-    },
-    animate: { height: 'auto', opacity: 1, y: 0 },
-    exit: (direction: 'up' | 'down' | 'collapse' | 'expand') => {
-      if (direction === 'collapse' || direction === 'expand') {
-        return { height: 0, opacity: 0 }
-      }
-      return { y: direction === 'down' ? -30 : 30, opacity: 0, height: 'auto' }
-    },
-  }
-
-  const workSurfaceTransition = {
-    duration: 0.2,
-    ease: [0.25, 0.1, 0.25, 1] as [number, number, number, number],
-  }
 
   const workViewTitle =
     workView === 'editor'
@@ -4460,9 +4439,9 @@ function App() {
           </div>
         </div>
 
-        <AnimatePresence mode="popLayout" initial={false} custom={workViewDirectionRef.current}>
+
           {workView === null ? null : workView === 'editor' ? (
-          <motion.div key="editor" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
+          <div className="work-surface-wrapper">
             <div className="work-surface" aria-label="Sample editor workspace">
               <div className="editor-toolbar">
                 <div className="editor-source-tabs" role="tablist" aria-label="Editor sources">
@@ -4916,9 +4895,9 @@ function App() {
                 </div>
               ) : null}
             </div>
-          </motion.div>
+          </div>
         ) : workView === 'mixer' ? (
-          <motion.div key="mixer" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
+          <div className="work-surface-wrapper">
           <MixerWorkspace
             bankMixerGains={bankMixerGains}
             bankMixerMuted={bankMixerMuted}
@@ -4938,9 +4917,9 @@ function App() {
             onPadGainChange={updatePadGain}
             onPadPanChange={updatePadPan}
           />
-          </motion.div>
+          </div>
         ) : workView === 'effects' ? (
-          <motion.div key="effects" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
+          <div className="work-surface-wrapper">
           <EffectsWorkspace
             bankEffects={bankEffects}
             masterEffect={masterEffect}
@@ -4949,9 +4928,9 @@ function App() {
             onSlotParamChange={handleSlotParamChange}
             onSlotToggleEnabled={handleSlotToggleEnabled}
           />
-          </motion.div>
+          </div>
         ) : (
-          <motion.div key="sequence" variants={workSurfaceVariants} initial="initial" animate="animate" exit="exit" custom={workViewDirectionRef.current} transition={workSurfaceTransition} style={{ overflow: 'hidden' }}>
+          <div className="work-surface-wrapper">
           <SequenceWorkspace
             sequencePromptText={sequencePromptText}
             sequenceGenerationStatus={sequenceGenerationStatus}
@@ -4980,9 +4959,8 @@ function App() {
             onSwitchSequence={switchSequence}
             onAddSequence={addSequence}
           />
-          </motion.div>
+          </div>
         )}
-        </AnimatePresence>
       </header>
 
       <section className="workspace">
