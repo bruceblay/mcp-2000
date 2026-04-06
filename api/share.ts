@@ -3,9 +3,11 @@ import { createHash } from 'crypto'
 import { nanoid } from 'nanoid'
 import { insertProject, getProject, findExistingSample, insertSample, countRecentSharesByIp } from './_shared/db.js'
 import { uploadSample } from './_shared/gcs.js'
+import { getClientIp, applyRateLimit } from './_shared/rate-limit.js'
 
 export const config = { maxDuration: 30 }
 
+const BURST_RATE_LIMIT = { max: 10, windowMs: 60_000 }
 const RATE_LIMIT_WINDOW_SECONDS = 60 * 60 // 1 hour
 const RATE_LIMIT_MAX_SHARES = 10
 const MAX_SAMPLES = 64
@@ -27,9 +29,6 @@ type ShareRequestBody = {
 }
 
 const sha256 = (buffer: Buffer) => createHash('sha256').update(buffer).digest('hex')
-
-const getClientIp = (req: VercelRequest) =>
-  (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ?? req.socket?.remoteAddress ?? 'unknown'
 
 // ---------------------------------------------------------------------------
 // POST /api/share — create a share link
@@ -54,8 +53,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.setHeader('Cache-Control', 'public, max-age=300')
       res.status(200).json({ snapshot: snapshotJson })
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to load share.'
-      res.status(500).json({ error: message })
+      console.error('share load error:', error)
+      res.status(500).json({ error: 'Failed to load share.' })
     }
     return
   }
@@ -65,6 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(405).json({ error: 'Use GET or POST /api/share.' })
     return
   }
+
+  if (applyRateLimit(req, res, 'share', BURST_RATE_LIMIT)) return
 
   try {
     const body = req.body as ShareRequestBody
@@ -134,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     res.status(201).json({ id: shareId })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to create share.'
-    res.status(500).json({ error: message })
+    console.error('share create error:', error)
+    res.status(500).json({ error: 'Failed to create share.' })
   }
 }

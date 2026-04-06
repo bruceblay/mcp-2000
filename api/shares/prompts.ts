@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { timingSafeEqual } from 'crypto'
 import { listRecentPrompts } from '../_shared/db.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -7,8 +8,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const authHeader = req.headers.authorization
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET?.trim()}`) {
+  const authHeader = req.headers.authorization ?? ''
+  const expected = `Bearer ${process.env.CRON_SECRET?.trim() ?? ''}`
+  const a = Buffer.from(authHeader)
+  const b = Buffer.from(expected)
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     res.status(401).json({ error: 'Unauthorized.' })
     return
   }
@@ -20,7 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'no-store')
     res.status(200).json({ prompts })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to list prompts.'
-    res.status(500).json({ error: message })
+    console.error('list prompts error:', error)
+    res.status(500).json({ error: 'Failed to list prompts.' })
   }
 }

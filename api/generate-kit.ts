@@ -1,8 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requestSchema, executeGenerateKit } from './_shared/index.js'
 import { logPrompt } from './_shared/db.js'
+import { applyRateLimit } from './_shared/rate-limit.js'
 
 export const config = { maxDuration: 60 }
+
+const RATE_LIMIT = { max: 8, windowMs: 60_000 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -14,6 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY.' })
     return
   }
+
+  if (applyRateLimit(req, res, 'generate-kit', RATE_LIMIT)) return
 
   try {
     const parsedRequest = requestSchema.parse(req.body)
@@ -53,7 +58,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       generatedPads: result.generatedPads,
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unexpected generation error.'
-    res.status(500).json({ error: message })
+    console.error('generate-kit error:', error)
+    res.status(500).json({ error: 'Generation failed. Please try again.' })
   }
 }

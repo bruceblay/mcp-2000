@@ -1,8 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { transformSampleSchema, executeTransformSample } from './_shared/index.js'
 import { logPrompt } from './_shared/db.js'
+import { applyRateLimit } from './_shared/rate-limit.js'
 
 export const config = { maxDuration: 60 }
+
+const RATE_LIMIT = { max: 10, windowMs: 60_000 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -14,6 +17,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(500).json({ error: 'Missing ELEVENLABS_API_KEY.' })
     return
   }
+
+  if (applyRateLimit(req, res, 'transform-sample', RATE_LIMIT)) return
 
   try {
     const parsedRequest = transformSampleSchema.parse(req.body)
@@ -30,7 +35,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Unexpected transform error.'
-    res.status(500).json({ error: message })
+    console.error('transform-sample error:', error)
+    res.status(500).json({ error: 'Transform failed. Please try again.' })
   }
 }
