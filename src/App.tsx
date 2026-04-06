@@ -1,7 +1,6 @@
 import { lazy, startTransition, Suspense, useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { ChevronDown, ChevronLeft, ChevronRight, Circle, Disc, Download, Metronome, Piano, Play, Square } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
-import JSZip from 'jszip'
 import { type Pad } from './mock-kit'
 import { SampleWaveform } from './components/sample-waveform'
 import { ScrollPicker } from './components/ScrollPicker'
@@ -1686,7 +1685,8 @@ function App() {
       await ensureAudioEngine()
 
       const context = getAudioContext()
-      const zip = new JSZip()
+      const { default: JSZipLib } = await import('jszip')
+      const zip = new JSZipLib()
       const bankLabel = `Bank-${currentBankId}`
 
       for (const pad of currentBankPads) {
