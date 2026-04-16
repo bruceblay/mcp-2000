@@ -34,7 +34,7 @@ export const buildImpulseResponse = (context: WebAudioContext, roomSize: number,
 }
 
 export const createBitcrusherNode = (context: WebAudioContext, bits: number, normalRange: number) => {
-  const processor = context.createScriptProcessor(4096, 2, 2) as BitcrusherProcessorNode
+  const processor = context.createScriptProcessor(256, 2, 2) as BitcrusherProcessorNode
   let step = Math.pow(2, Math.max(1, Math.round(bits)) - 1)
   let sampleRateReduction = Math.floor(normalRange * 32) + 1
   let sampleCounter = 0
@@ -68,7 +68,7 @@ export const createBitcrusherNode = (context: WebAudioContext, bits: number, nor
 }
 
 export const createLoopChopNode = (context: WebAudioContext, loopSize: number, stutterRate: number) => {
-  const processor = context.createScriptProcessor(4096, 2, 2) as LoopChopProcessorNode
+  const processor = context.createScriptProcessor(256, 2, 2) as LoopChopProcessorNode
 
   const loopSizes = [0.125, 0.25, 0.5, 1.0, 2.0]
   const beatLength = 60 / 120
@@ -157,7 +157,7 @@ export const createLoopChopNode = (context: WebAudioContext, loopSize: number, s
 }
 
 export const createTapeStopNode = (context: WebAudioContext, stopTime: number, restartTime: number, mode: number) => {
-  const processor = context.createScriptProcessor(4096, 2, 2) as TapeStopProcessorNode
+  const processor = context.createScriptProcessor(256, 2, 2) as TapeStopProcessorNode
 
   const bufferLength = context.sampleRate * 2
   const bufferL = new Float32Array(bufferLength)

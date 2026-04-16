@@ -1,11 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { streamText } from 'ai'
+import { z } from 'zod'
 import { CHAT_SYSTEM_PROMPT } from './_shared/index.js'
+import { applyRateLimit } from './_shared/rate-limit.js'
 
 export const config = { maxDuration: 60 }
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string }
+const RATE_LIMIT = { max: 30, windowMs: 60_000 }
+
+const chatRequestSchema = z.object({
+  messages: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string().min(1).max(4000),
+  })).min(1).max(50),
+})
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
@@ -18,11 +27,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const { messages } = req.body as { messages?: ChatMessage[] }
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    res.status(400).json({ error: 'messages array is required.' })
+  if (applyRateLimit(req, res, 'chat', RATE_LIMIT)) return
+
+  const parsed = chatRequestSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid messages.' })
     return
   }
+
+  const { messages } = parsed.data
 
   const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 

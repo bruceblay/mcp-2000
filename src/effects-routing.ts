@@ -396,7 +396,7 @@ export const createGlobalEffectRouting = ({
     const wobble = context.createDelay(0.05)
     const lfo = context.createOscillator()
     const lfoGain = context.createGain()
-    const noise = context.createScriptProcessor(2048, 1, 2)
+    const noise = context.createScriptProcessor(256, 1, 2)
     const noiseGain = context.createGain()
 
     shaper.curve = buildDistortionCurve(clamp(effectParams.saturation ?? 0.4, 0, 1))

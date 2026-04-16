@@ -65,7 +65,7 @@ export const transformSampleSchema = z.object({
   sampleName: z.string().min(1).max(64),
   sampleFile: z.string().min(1).max(160),
   editorSource: z.enum(['pad', 'loop']),
-  audioBase64: z.string().min(1),
+  audioBase64: z.string().min(1).max(4_000_000),
   mimeType: z.string().min(1).max(120).optional(),
 })
 

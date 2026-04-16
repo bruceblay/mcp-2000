@@ -14,7 +14,4 @@
 - some effects need work: bitcrusher, cd skipper, lofi tape
 - electron app?
 - sound feedback for playing sound on bank faders on mixer
-- select chevron on pads banks so users can have more flexibility on which banks are in use.  would also allow for reverting bank setting if accidentally overwritten.
-- add some self identification in an explainer maybe answer 'who made this?' in the chat
-- no sound on mobile
-- weird auto zooming in prompt input on mobile
+- swing
