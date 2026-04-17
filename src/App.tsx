@@ -201,8 +201,7 @@ function App() {
   const isPadReversed = selectedPadSettings.reversed
   const currentEditorAudioUrl = editorSource === 'loop' && generatedLoop ? generatedLoop.sampleUrl : selectedPad.sampleUrl
   const currentEditorAudioDuration = editorSource === 'loop' && generatedLoop ? getLoopDurationSeconds(generatedLoop) : null
-  const currentEditorSampleName = editorSource === 'loop' && generatedLoop ? generatedLoop.sampleName : selectedPad.sampleName
-  const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
+const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
   const editorExportLabel = isLoopEditorActive ? 'Export Loop' : 'Export Sample'
   const selectedChop = selectedChopId ? loopChopRegions.find((region) => region.id === selectedChopId) ?? null : null
   const selectedChopDurationSeconds = selectedChop ? Math.max(0.01, selectedChop.end - selectedChop.start) : null
