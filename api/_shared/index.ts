@@ -60,14 +60,6 @@ export const requestSchema = z.object({
   sequencePads: z.array(sequencePadContextSchema).length(16).optional(),
 })
 
-export const transformSampleSchema = z.object({
-  prompt: z.string().min(20).max(320),
-  sampleName: z.string().min(1).max(64),
-  sampleFile: z.string().min(1).max(160),
-  editorSource: z.enum(['pad', 'loop']),
-  audioBase64: z.string().min(1).max(4_000_000),
-  mimeType: z.string().min(1).max(120).optional(),
-})
 
 const kitPlanItemSchema = z.object({
   padId: z.enum(allPadIds),
@@ -222,121 +214,6 @@ const generateElevenLabsSample = async (
   return Buffer.from(await response.arrayBuffer())
 }
 
-const createPromptDesignedVoice = async (
-  apiKey: string,
-  prompt: string,
-  sampleName: string,
-  referenceAudioBase64: string,
-) => {
-  const designResponse = await fetch('https://api.elevenlabs.io/v1/text-to-voice/design', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'xi-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      voice_description: prompt,
-      model_id: 'eleven_ttv_v3',
-      auto_generate_text: true,
-      reference_audio_base64: referenceAudioBase64,
-      prompt_strength: 0.82,
-    }),
-  })
-
-  if (!designResponse.ok) {
-    const errorText = await designResponse.text()
-    throw new Error('ElevenLabs voice design failed: ' + errorText)
-  }
-
-  const designPayload = await designResponse.json() as {
-    previews?: Array<{
-      generated_voice_id?: string
-    }>
-  }
-  const generatedVoiceId = designPayload.previews?.[0]?.generated_voice_id
-
-  if (!generatedVoiceId) {
-    throw new Error('ElevenLabs voice design did not return a generated voice.')
-  }
-
-  const createResponse = await fetch('https://api.elevenlabs.io/v1/text-to-voice', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'xi-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      voice_name: `Sampler ${slugify(sampleName)} ${Date.now()}`,
-      voice_description: prompt,
-      generated_voice_id: generatedVoiceId,
-    }),
-  })
-
-  if (!createResponse.ok) {
-    const errorText = await createResponse.text()
-    throw new Error('ElevenLabs voice creation failed: ' + errorText)
-  }
-
-  const createPayload = await createResponse.json() as { voice_id?: string }
-
-  if (!createPayload.voice_id) {
-    throw new Error('ElevenLabs voice creation did not return a voice id.')
-  }
-
-  return createPayload.voice_id
-}
-
-const deleteDesignedVoice = async (apiKey: string, voiceId: string) => {
-  try {
-    await fetch(`https://api.elevenlabs.io/v1/voices/${voiceId}`, {
-      method: 'DELETE',
-      headers: {
-        'xi-api-key': apiKey,
-      },
-    })
-  } catch {}
-}
-
-const transformEditorSample = async (
-  apiKey: string,
-  options: {
-    prompt: string
-    sampleName: string
-    sampleFile: string
-    audioBase64: string
-    mimeType?: string
-  },
-) => {
-  const voiceId = await createPromptDesignedVoice(apiKey, options.prompt, options.sampleName, options.audioBase64)
-
-  try {
-    const sampleBuffer = Buffer.from(options.audioBase64, 'base64')
-    const formData = new FormData()
-
-    formData.set('audio', new Blob([sampleBuffer], { type: options.mimeType || 'audio/wav' }), options.sampleFile)
-    formData.set('model_id', 'eleven_english_sts_v2')
-    formData.set('remove_background_noise', 'true')
-
-    const response = await fetch(`https://api.elevenlabs.io/v1/speech-to-speech/${voiceId}`, {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        Accept: 'audio/mpeg',
-      },
-      body: formData,
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error('ElevenLabs speech transformation failed: ' + errorText)
-    }
-
-    return Buffer.from(await response.arrayBuffer())
-  } finally {
-    await deleteDesignedVoice(apiKey, voiceId)
-  }
-}
-
 // --- Result types ---
 
 export type GeneratedPadResult = Omit<Pad, 'sampleUrl'> & { audioBase64: string }
@@ -356,13 +233,6 @@ export type GeneratedSequenceResult = {
   lanes: Array<{ padId: string; activeSteps: number[] }>
 }
 
-export type TransformSampleResult = {
-  summary: string
-  sampleName: string
-  sampleFile: string
-  sourceType: 'resampled'
-  audioBase64: string
-}
 
 export type GenerateKitResult =
   | { type: 'kit'; bankId?: string; summary: string; generatedPads: GeneratedPadResult[] }
@@ -606,32 +476,6 @@ export async function executeGenerateKit(
   }
 }
 
-export async function executeTransformSample(
-  elevenLabsApiKey: string,
-  parsedRequest: z.infer<typeof transformSampleSchema>,
-): Promise<TransformSampleResult> {
-  if (!elevenLabsApiKey) {
-    throw new Error('Missing ELEVENLABS_API_KEY. Add it to your environment before transforming samples.')
-  }
-
-  const audioBuffer = await transformEditorSample(elevenLabsApiKey, {
-    prompt: parsedRequest.prompt,
-    sampleName: parsedRequest.sampleName,
-    sampleFile: parsedRequest.sampleFile,
-    audioBase64: parsedRequest.audioBase64,
-    mimeType: parsedRequest.mimeType,
-  })
-
-  const fileName = `${Date.now()}-${slugify(parsedRequest.sampleName)}-elevenlabs.mp3`
-
-  return {
-    summary: `Loaded an ElevenLabs-transformed ${parsedRequest.editorSource === 'loop' ? 'loop' : 'sample'} from your prompt.`,
-    sampleName: `${parsedRequest.sampleName} EL`,
-    sampleFile: fileName,
-    sourceType: 'resampled',
-    audioBase64: audioBuffer.toString('base64'),
-  }
-}
 
 // --- Chat assistant system prompt ---
 

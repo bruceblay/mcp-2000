@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requestSchema, executeGenerateKit } from './_shared/index.js'
-import { logPrompt } from './_shared/db.js'
-import { applyRateLimit } from './_shared/rate-limit.js'
+import { logPrompt, checkAndIncrementGenerationBudget } from './_shared/db.js'
+import { applyRateLimit, getClientIp } from './_shared/rate-limit.js'
 
 export const config = { maxDuration: 60 }
 
@@ -27,6 +27,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : parsedRequest.mode === 'loop' ? 'generate-loop' as const
       : parsedRequest.mode === 'pad' ? 'generate-pad' as const
       : 'generate-kit' as const
+
+    const usesElevenLabs = mode !== 'generate-sequence'
+    if (usesElevenLabs) {
+      const allowed = await checkAndIncrementGenerationBudget(getClientIp(req))
+      if (!allowed) {
+        res.status(429).json({ error: 'Daily generation limit reached. Come back tomorrow.' })
+        return
+      }
+    }
+
     logPrompt(mode, parsedRequest.prompt, { bankId: parsedRequest.bankId, mode: parsedRequest.mode })
     const result = await executeGenerateKit(
       process.env.ANTHROPIC_API_KEY,

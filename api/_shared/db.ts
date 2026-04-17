@@ -27,7 +27,7 @@ const promptLogs = () => getDb().collection('prompt_logs')
 // Prompt logging (fire-and-forget)
 // ---------------------------------------------------------------------------
 
-export type PromptLogSource = 'generate-kit' | 'generate-loop' | 'generate-pad' | 'generate-sequence' | 'transform-sample'
+export type PromptLogSource = 'generate-kit' | 'generate-loop' | 'generate-pad' | 'generate-sequence'
 
 export const logPrompt = (source: PromptLogSource, prompt: string, metadata?: Record<string, unknown>) => {
   promptLogs().add({
@@ -216,6 +216,35 @@ export const decrementSampleRefs = async (sampleHashes: string[]) => {
   if (sampleHashes.length > 0) {
     await batch.commit()
   }
+}
+
+// ---------------------------------------------------------------------------
+// Per-IP daily generation budget (ElevenLabs-backed modes only)
+// ---------------------------------------------------------------------------
+
+const generationBudgets = () => getDb().collection('generation_budgets')
+
+const DAILY_GENERATION_LIMIT = 5
+
+export const checkAndIncrementGenerationBudget = async (ip: string): Promise<boolean> => {
+  const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD UTC
+  const docRef = generationBudgets().doc(`${ip}:${today}`)
+
+  return getDb().runTransaction(async (tx) => {
+    const doc = await tx.get(docRef)
+    const count = doc.exists ? (doc.data()!.count as number) : 0
+
+    if (count >= DAILY_GENERATION_LIMIT) return false
+
+    tx.set(docRef, {
+      count: count + 1,
+      ip,
+      date: today,
+      expiresAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
+    }, { merge: true })
+
+    return true
+  })
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ type GenerationPanelProps = {
   promptText: string
   generationStatus: GenerationStatus
   generationMode: GenerationMode
+  generationAvailable: boolean
   onPromptChange: (value: string) => void
   onGenerateAudio: (mode: 'kit' | 'loop') => void
 }
@@ -14,10 +15,22 @@ export function GenerationPanel({
   promptText,
   generationStatus,
   generationMode,
+  generationAvailable,
   onPromptChange,
   onGenerateAudio,
 }: GenerationPanelProps) {
   const placeholder = useMemo(() => 'Try: ' + placeholderPrompts[Math.floor(Math.random() * placeholderPrompts.length)], [])
+
+  if (!generationAvailable) {
+    return (
+      <section className="prompt-panel panel generation-unavailable">
+        <div className="panel-heading">
+          <p className="panel-kicker">Generate</p>
+        </div>
+        <p className="generation-unavailable-notice">Sound generation unavailable — credits exhausted.</p>
+      </section>
+    )
+  }
 
   return (
     <section className="prompt-panel panel">

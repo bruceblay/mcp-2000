@@ -3,7 +3,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { streamText } from 'ai'
-import { requestSchema, transformSampleSchema, executeGenerateKit, executeTransformSample, CHAT_SYSTEM_PROMPT } from './api/_shared'
+import { requestSchema, executeGenerateKit, CHAT_SYSTEM_PROMPT } from './api/_shared'
 
 const readJsonBody = async (req: IncomingMessage) => {
   const chunks: Uint8Array[] = []
@@ -81,42 +81,34 @@ export default defineConfig(({ mode }) => {
     }
   }
 
-  const transformSampleHandler = async (
+  const elevenLabsStatusHandler = async (
     req: IncomingMessage,
     res: ServerResponse,
     next: (error?: unknown) => void,
   ) => {
-    if (req.url !== '/api/transform-sample') {
+    if (req.url !== '/api/elevenlabs-status') {
       next()
       return
     }
 
-    if (req.method !== 'POST') {
-      sendJson(res, 405, { error: 'Use POST /api/transform-sample.' })
-      return
-    }
-
     if (!env.ELEVENLABS_API_KEY) {
-      sendJson(res, 500, { error: 'Missing ELEVENLABS_API_KEY. Add it to your environment before transforming samples.' })
+      sendJson(res, 200, { available: false })
       return
     }
 
     try {
-      const parsedRequest = transformSampleSchema.parse(await readJsonBody(req))
-      const result = await executeTransformSample(env.ELEVENLABS_API_KEY, parsedRequest)
-
-      sendJson(res, 200, {
-        summary: result.summary,
-        transformedSample: {
-          sampleName: result.sampleName,
-          sampleFile: result.sampleFile,
-          sourceType: result.sourceType,
-          audioBase64: result.audioBase64,
-        },
+      const response = await fetch('https://api.elevenlabs.io/v1/user/subscription', {
+        headers: { 'xi-api-key': env.ELEVENLABS_API_KEY },
+        signal: AbortSignal.timeout(4000),
       })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unexpected transform error.'
-      sendJson(res, 500, { error: message })
+      if (!response.ok) { sendJson(res, 200, { available: false }); return }
+      const data = await response.json() as { character_count?: number; character_limit?: number }
+      const limit = Number(data?.character_limit)
+      const count = Number(data?.character_count)
+      const available = Number.isFinite(limit) && Number.isFinite(count) ? limit - count > 50 : true
+      sendJson(res, 200, { available })
+    } catch {
+      sendJson(res, 200, { available: false })
     }
   }
 
@@ -180,12 +172,12 @@ export default defineConfig(({ mode }) => {
         name: 'local-generate-kit-api',
         configureServer(server) {
           server.middlewares.use(generateKitHandler)
-          server.middlewares.use(transformSampleHandler)
+          server.middlewares.use(elevenLabsStatusHandler)
           server.middlewares.use(chatHandler)
         },
         configurePreviewServer(server) {
           server.middlewares.use(generateKitHandler)
-          server.middlewares.use(transformSampleHandler)
+          server.middlewares.use(elevenLabsStatusHandler)
           server.middlewares.use(chatHandler)
         },
       },

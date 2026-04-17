@@ -43,15 +43,6 @@ export type GeneratedLoop = {
   sourceType: PadSourceType
 }
 
-export type EditorTransformResponse = {
-  summary?: string
-  transformedSample: {
-    sampleName: string
-    sampleFile: string
-    sampleUrl: string
-    sourceType: PadSourceType
-  }
-}
 
 export type ChopRegion = WaveformRegion
 

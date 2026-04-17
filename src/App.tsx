@@ -15,7 +15,7 @@ import {
   bankIds,
   type BankId, type EngineStatus, type GenerationStatus, type GenerationMode, type SequenceGenerationAction,
   type MicCaptureState, type WorkView, type EditorSource, type PlaybackMode, type RecordedTake, type GeneratedLoop,
-  type EditorTransformResponse, type ChopRegion, type BitcrusherProcessorNode, type LoopChopProcessorNode, type TapeStopProcessorNode, type ActiveEffectRuntime,
+  type ChopRegion, type BitcrusherProcessorNode, type LoopChopProcessorNode, type TapeStopProcessorNode, type ActiveEffectRuntime,
   type ActivePadAudio, type ActiveChromaticNoteAudio, type ActiveLoopPlayback, type MidiPadNoteMappings,
   type NavigatorWithMidi, type PadPlaybackSetting, type BankState, type Sequence,
   type ArpMode, type ArpDivision, type EffectChainState, type EffectChainSlotId, effectChainSlotIds,
@@ -26,7 +26,7 @@ import {
   getPadPlaybackWindow, encodeWavBlob, sanitizeDownloadName, triggerBlobDownload,
   getSubdivisionSeconds, getEffectTailPaddingSeconds,
   getLoopDurationSeconds, buildChopRegions, normalizeChopRegions,
-  loadAudioDurationFromUrl, base64ToBlob, blobToBase64, getLfoWaveform,
+  loadAudioDurationFromUrl, base64ToBlob, getLfoWaveform,
   getPreferredRecordingMimeType, getRecordingFileExtension,
 } from './audio-utils'
 import { formatClockDuration, formatChopRegionLabel, formatMidiNoteLabel } from './format-utils'
@@ -63,6 +63,7 @@ function App() {
   const [promptText, setPromptText] = useState('')
   const [generationStatus, setGenerationStatus] = useState<GenerationStatus>('idle')
   const [generationMode, setGenerationMode] = useState<GenerationMode>('kit')
+  const [generationAvailable, setGenerationAvailable] = useState(true)
   const [_generationMessage, setGenerationMessage] = useState('Generate a full 16-pad bank or a loop for chopping.')
   const [micCaptureState, setMicCaptureState] = useState<MicCaptureState>('idle')
   const [micCaptureMessage, setMicCaptureMessage] = useState('Capture a raw take from your microphone, then load it into a pad or the editor.')
@@ -79,13 +80,11 @@ function App() {
   const [loopChopRegions, setLoopChopRegions] = useState<ChopRegion[]>([])
   const [selectedChopId, setSelectedChopId] = useState<string | null>(null)
   const [editorPlayheadFraction, setEditorPlayheadFraction] = useState<number | null>(null)
-  const [editorTransformPrompt, setEditorTransformPrompt] = useState('')
   const [isExportingSample, setIsExportingSample] = useState(false)
   const [isExportingSequence, setIsExportingSequence] = useState(false)
   const [sequenceExportMessage, setSequenceExportMessage] = useState('Render all audible banks as a WAV clip with the current FX chain.')
   const [isPerformanceRecording, setIsPerformanceRecording] = useState(false)
   const [performanceRecordingElapsed, setPerformanceRecordingElapsed] = useState(0)
-  const [isTransformingEditorAudio, setIsTransformingEditorAudio] = useState(false)
   const [isLoopPlaying, setIsLoopPlaying] = useState(false)
   const [isNormalizingLoop, setIsNormalizingLoop] = useState(false)
   const [, setLoopDecodeStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
@@ -244,6 +243,13 @@ function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light')
   }, [isDarkMode])
+
+  useEffect(() => {
+    fetch('/api/elevenlabs-status')
+      .then((r) => r.json())
+      .then((data: { available: boolean }) => setGenerationAvailable(data.available))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (openBankPopover === null) return
@@ -1750,111 +1756,6 @@ function App() {
       setSequenceExportMessage(error instanceof Error ? error.message : 'Sequence export failed.')
     } finally {
       setIsExportingSequence(false)
-    }
-  }
-
-  const transformCurrentEditorAudio = async () => {
-    const nextPrompt = editorTransformPrompt.trim()
-
-    if (!currentEditorAudioUrl || !nextPrompt) {
-      return
-    }
-
-    if (nextPrompt.length < 20) {
-      setGenerationMessage('Give ElevenLabs a more descriptive transform prompt with at least 20 characters.')
-      return
-    }
-
-    try {
-      setIsTransformingEditorAudio(true)
-
-      const renderedAsset = await renderCurrentEditorAudioAsset()
-      const audioBase64 = await blobToBase64(renderedAsset.blob)
-      const response = await fetch('/api/transform-sample', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt: nextPrompt,
-          sampleName: currentEditorSampleName,
-          sampleFile: renderedAsset.fileName,
-          editorSource,
-          audioBase64,
-          mimeType: renderedAsset.blob.type || 'audio/wav',
-        }),
-      })
-
-      const payload = (await response.json()) as {
-        error?: string
-        summary?: string
-        transformedSample?: EditorTransformResponse['transformedSample'] & { audioBase64?: string }
-      }
-
-      if (!response.ok || !payload.transformedSample) {
-        throw new Error(payload.error || 'ElevenLabs transformation failed.')
-      }
-
-      const transformedSample = payload.transformedSample
-
-      if (transformedSample.audioBase64) {
-        transformedSample.sampleUrl = createEphemeralAudioUrl(base64ToBlob(transformedSample.audioBase64))
-        transformedSample.audioBase64 = undefined
-      }
-
-      if (editorSource === 'loop' && generatedLoop) {
-        const durationSeconds = Math.max(0.01, await loadAudioDurationFromUrl(transformedSample.sampleUrl))
-        preservedLoopChopRegionsRef.current = loopChopRegions
-        preservedSelectedChopIdRef.current = selectedChopId
-
-        stopLoopPlayback()
-        setGeneratedLoop({
-          sampleName: transformedSample.sampleName,
-          sampleFile: transformedSample.sampleFile,
-          sampleUrl: transformedSample.sampleUrl,
-          durationLabel: `${durationSeconds.toFixed(2)}s transformed`,
-          durationSeconds,
-          bpm: generatedLoop.bpm,
-          sourceType: transformedSample.sourceType,
-        })
-      } else {
-        stopAllPadSources()
-        setActivePadIds([])
-        setEditorPlayheadFraction(null)
-
-        updateCurrentBank((bank) => ({
-          ...bank,
-          pads: bank.pads.map((pad) => (
-            pad.id === selectedPad.id
-              ? {
-                  ...pad,
-                  sampleName: transformedSample.sampleName,
-                  sampleFile: transformedSample.sampleFile,
-                  sampleUrl: transformedSample.sampleUrl,
-                  sourceType: transformedSample.sourceType,
-                  durationLabel: 'ElevenLabs transformed',
-                }
-              : pad
-          )),
-          playbackSettings: {
-            ...bank.playbackSettings,
-            [selectedPad.id]: {
-              ...bank.playbackSettings[selectedPad.id],
-              startFraction: 0,
-              endFraction: 1,
-              reversed: false,
-            },
-          },
-        }))
-      }
-
-      setEditorTransformPrompt('')
-      setGenerationMessage(payload.summary || `Loaded a transformed version of ${currentEditorSampleName} into the editor.`)
-    } catch (error) {
-      console.error('Editor transform failed.', error)
-      setGenerationMessage(error instanceof Error ? error.message : 'Editor transform failed.')
-    } finally {
-      setIsTransformingEditorAudio(false)
     }
   }
 
@@ -4468,36 +4369,6 @@ function App() {
                     Mic Record
                   </button>
                 </div>
-                <label className="editor-transform-bar" hidden={editorSource === 'mic'}>
-                  <input
-                    type="text"
-                    value={editorTransformPrompt}
-                    onChange={(event) => setEditorTransformPrompt(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== 'Enter') {
-                        return
-                      }
-
-                      event.preventDefault()
-                      void transformCurrentEditorAudio()
-                    }}
-                    maxLength={240}
-                    placeholder={editorSource === 'loop'
-                      ? 'Transform this loop into something new'
-                      : 'Describe how to transform this sample'}
-                    aria-label="Describe how ElevenLabs should transform this sound"
-                  />
-                  <button
-                    type="button"
-                    className="work-tab editor-transform-button"
-                    onClick={() => {
-                      void transformCurrentEditorAudio()
-                    }}
-                    disabled={isTransformingEditorAudio || editorTransformPrompt.trim().length < 20}
-                  >
-                    {isTransformingEditorAudio ? 'Sending...' : 'Generate'}
-                  </button>
-                </label>
                 <div className="work-surface-actions editor-toolbar-actions" hidden={editorSource === 'mic'}>
                   <button
                     type="button"
@@ -5162,6 +5033,7 @@ function App() {
           promptText={promptText}
           generationStatus={generationStatus}
           generationMode={generationMode}
+          generationAvailable={generationAvailable}
           onPromptChange={setPromptText}
           onGenerateAudio={(mode) => { void generateAudio(mode) }}
         />

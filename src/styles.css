@@ -968,27 +968,6 @@ button:active:not(:disabled) {
   flex-wrap: wrap;
 }
 
-.editor-transform-bar {
-  flex: 1 1 20rem;
-  min-width: min(26rem, 100%);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.55rem;
-  align-items: center;
-}
-
-.editor-transform-bar input {
-  width: 100%;
-  min-width: 0;
-  border: none;
-  background: var(--lcd-highlight);
-  color: var(--lcd-text);
-  padding: 0.52rem 0.68rem;
-}
-
-.editor-transform-button {
-  white-space: nowrap;
-}
 
 .waveform-panel {
   position: relative;
@@ -3321,18 +3300,12 @@ button:active:not(:disabled) {
     display: grid;
     grid-template-columns: 1fr auto;
     grid-template-areas:
-      "tabs tabs"
-      "transform export";
+      "tabs export";
     gap: 0.5rem;
   }
 
   .editor-source-tabs {
     grid-area: tabs;
-  }
-
-  .editor-transform-bar {
-    grid-area: transform;
-    min-width: 0;
   }
 
   .editor-toolbar-actions {
