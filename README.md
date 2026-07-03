@@ -1,6 +1,6 @@
-# Browser Gen MPC
+# MCP 2000
 
-`browser-gen-mpc` is a simple single-page React app for prompt-powered sample generation and MPC-style performance in the browser.
+MCP 2000 is a simple single-page React app for prompt-powered sample generation and MPC-style performance in the browser.
 
 The goal is to combine a classic 4x4 pad workflow with modern generative audio tooling:
 
