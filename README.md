@@ -1,177 +1,98 @@
 # MCP 2000
 
-MCP 2000 is a simple single-page React app for prompt-powered sample generation and MPC-style performance in the browser.
+A browser-based drum machine and sampler inspired by the Akai MPC, with AI sample generation built in. Type a description of a kit, get 16 playable pads, then chop, sequence, mix, and record the result without leaving the tab.
 
-The goal is to combine a classic 4x4 pad workflow with modern generative audio tooling:
+Built with React 19, TypeScript, Vite, and the Web Audio API. Deployed on Vercel.
 
-- Generate one-shots, drum kits, and loops from text prompts
-- Load samples onto a 4x4 pad grid
-- Trigger pads with mouse clicks or keyboard keys
-- Edit audio with chopping, pitch shifting, trimming, and sequencing tools
-- Add effects for shaping sound
-- Eventually export performances and arrangements to `.wav`
+## Features
 
-## Vision
+**Pads and banks**
+- 16 velocity-sensitive pads in a 4x4 grid, triggered by click, touch, or keyboard (1-4, Q-R, A-F, Z-C)
+- 4 banks (A/B/C/D), each holding its own 16-pad kit, effects chain, and sequence
+- Chromatic mode plays a single sample across a piano keyboard layout
+- Web MIDI input for external controllers
 
-This project is inspired by the Akai MPC workflow: fast pad-based experimentation, finger-drumming, chopping samples, building loops, and sketching ideas quickly.
+**AI generation**
+- Text prompt to a full 16-pad kit, a single pad, a loop, or a step-sequencer pattern
+- Claude picks the kit design and writes the per-sample prompts, ElevenLabs renders the audio
+- Preset prompt chips for quick starts
 
-The twist is that the sounds are not limited to pre-existing sample packs. Users should be able to type prompts like:
+**Sample editor**
+- Waveform view with start and end trimming
+- Pitch in semitones, gain, pan, reverse
+- Chop a loop into slices spread across pads
 
-- "Dusty boom bap drum kit with crunchy snares and a warm vinyl kick"
-- "4-bar Detroit techno loop at 132 BPM"
-- "Minimal percussion kit made from kitchen sounds"
-- "Lo-fi jazz guitar loop in A minor, 8 seconds"
+**Sequencer and transport**
+- 16 or 32 step grid with per-pad lanes and per-step velocity
+- BPM 40-220, play, stop, and live pad recording as takes
+- Arpeggiator with selectable modes and divisions
 
-The app should turn those prompts into usable audio assets that can be played, edited, sequenced, and eventually exported.
+**Mixer and effects**
+- Per-pad gain and pan, per-bank master gain, level meters
+- 23 effects including reverb, hall reverb, delay, tap delay, distortion, bitcrusher, filter, DJ EQ, compressor, chorus, flanger, phaser, tremolo, vibrato, auto filter, auto panner, comb filter, ring mod, pitch shifter, tape stop, CD skipper, sidechain pump, and lo-fi tape
+- Master compressor and limiter on the output
 
-## Core Product
+**Recording and export**
+- Record the master output (effects and all) to a WAV, up to 10 minutes
+- Export individual samples or a whole kit as a ZIP
+- Share a project as a link, which recipients open as their own remixable copy
 
-### 1. Pad Grid
+## How audio works
 
-- A single-page interface with a 4x4 grid of pads
-- Each pad can hold a generated or uploaded sample
-- Pads should be playable via:
-  - mouse / touch interaction
-  - keyboard key mapping
-- Pads should provide quick visual feedback when triggered
+There is no database for audio data. Three paths, depending on where a sound comes from:
 
-### 2. Prompt-Based Sample Generation
+1. **Built-in kits** are static files in `public/`. The browser fetches them, `decodeAudioData` turns them into `AudioBuffer`s, and those are cached in a Map keyed by URL so each file decodes once. Triggering a pad creates a fresh `BufferSource` off the cached buffer.
+2. **Generated samples** come back from `/api/generate-kit` as base64 in the JSON response, become a Blob and an object URL on the client, then decode the same way. They live only in the tab.
+3. **Shared projects** are the only thing persisted. Each sample is hashed, the bytes go to Google Cloud Storage, and Firestore stores the hash, the GCS path, and a ref count. The project document holds a JSON snapshot of app state plus the list of sample hashes. Content hashing dedupes identical samples, and a nightly cron deletes anything with a ref count of zero.
 
-Users should be able to request:
+Most effects are native Web Audio nodes. Bitcrusher, CD skipper, tape stop, and sidechain pump run through `ScriptProcessorNode` for sample-level control.
 
-- Entire drum kits
-- Individual one-shot samples
-- Loops of a specific duration
-- Audio in a requested genre, mood, texture, or tempo
+## Project layout
 
-Prompt examples:
+```
+src/
+  App.tsx              main app, audio engine, transport, pad triggering
+  audio-utils.ts       buffer helpers, custom DSP nodes, offline rendering
+  effects/             one module per effect (config plus node builder)
+  effects-routing.ts   builds and connects the per-bank effects chain
+  components/          chat panel, mixer, effects workspace, knob, waveform
+  project-snapshot.ts  serialize and deserialize project state for sharing
+api/
+  generate-kit.ts      Claude plus ElevenLabs generation, rate limited
+  chat.ts              in-app assistant
+  share.ts             create and load shared projects
+  shares/              recent shares and prompt logs
+  cron/                nightly orphaned sample cleanup
+  _shared/             Firestore, GCS, rate limiting, generation pipeline
+```
 
-- "Trap hi-hat roll kit"
-- "Ambient percussion made from glass and water"
-- "2-second snare with gated reverb"
-- "8-bar afro-house shaker loop at 120 BPM"
+## Running locally
 
-### 3. Audio Editing Tools
+```bash
+npm install
+npm run dev
+```
 
-Basic sample tools should include:
+The app runs without any keys, using the bundled sample kits. AI generation and sharing need environment variables:
 
-- Trim start / end
-- Sample chopping / slice creation
-- Pitch shifting
-- Volume and pan
-- Reverse
-- Loop region editing
-- Start / end / envelope controls
+| Variable | Used for |
+| --- | --- |
+| `ANTHROPIC_API_KEY` | kit design, sequence generation, chat assistant |
+| `ELEVENLABS_API_KEY` | rendering the generated audio |
+| `GCP_PROJECT_ID` | Firestore and GCS project |
+| `GCP_SERVICE_ACCOUNT_KEY` | service account JSON, as a single-line string |
+| `GCS_BUCKET_NAME` | bucket holding shared samples |
+| `CRON_SECRET` | authorizes the cleanup cron |
 
-### 4. Sequencing
+See `docs/gcp-setup.md` for the Google Cloud side.
 
-The app should support lightweight beat-making and arrangement workflows:
+Generation is capped at 5 ElevenLabs-backed generations per IP per day, plus a shorter per-minute rate limit on the endpoint. Shared projects expire after 30 days.
 
-- Step sequencing for pad patterns
-- Tempo / BPM control
-- Swing / timing adjustment
-- Pattern playback
-- Basic loop building
+```bash
+npm run build     # tsc -b, then vite build
+npm run preview   # serve the production build
+```
 
-### 5. Audio Effects
+## Credits
 
-Early effect ideas:
-
-- Filter
-- Delay
-- Reverb
-- Distortion / saturation
-- Compressor
-- Bitcrush
-
-### 6. Export
-
-Longer term, users should be able to export:
-
-- Individual pads or samples
-- Loops
-- Full sequence playback
-- `.wav` output
-
-## Suggested User Flow
-
-1. Open the app
-2. Enter a prompt for a kit, one-shot, or loop
-3. Generate audio assets
-4. Assign results to the 4x4 pad grid
-5. Play pads with the mouse or keyboard
-6. Chop, pitch, sequence, and effect the sounds
-7. Export the result as audio
-
-## MVP Scope
-
-A strong first version would include:
-
-- React single-page app
-- 4x4 playable sample grid
-- Keyboard mapping for all 16 pads
-- Ability to load generated samples onto pads
-- Basic playback controls
-- Simple trim and pitch controls
-- Minimal sequencer
-
-Everything else can layer on after the core interaction feels good.
-
-## Technical Direction
-
-Potential implementation choices:
-
-- React for the UI
-- Web Audio API for playback, routing, and effects
-- A waveform visualization library for editing
-- Client-side state for pads, sequencing, and transport
-- A backend or API integration for prompt-based audio generation
-
-Areas to think through early:
-
-- Sample format and file management
-- Latency and pad responsiveness
-- Keyboard mapping ergonomics
-- Non-destructive sample editing
-- Offline rendering / WAV export path
-
-## Roadmap
-
-### Phase 1
-
-- Set up React app shell
-- Build 4x4 pad grid
-- Add mouse and keyboard triggering
-- Load local or remote samples into pads
-- Basic visual pad states
-
-### Phase 2
-
-- Add prompt input for generated audio
-- Integrate sample generation workflow
-- Support kit and loop generation
-- Store generated assets in pad slots
-
-### Phase 3
-
-- Add trimming, chopping, and pitch shifting
-- Add waveform display
-- Add simple effects chain
-
-### Phase 4
-
-- Add sequencing and transport controls
-- Add pattern save/load
-- Add WAV export
-
-## Open Questions
-
-- Which audio generation service or model should power prompt-to-sample creation?
-- Should generated loops be sliced automatically across multiple pads?
-- Should kits arrive as 16 assigned pads by default?
-- How much editing should happen in-browser versus server-side?
-- Do we want one global effects chain, per-pad effects, or both?
-
-## Status
-
-Project is currently at the concept / planning stage. The next practical step is to scaffold the React app and implement the playable 4x4 pad grid first.
+Built by Bruce Blay. Portfolio at [coolbrb.com](https://coolbrb.com).
