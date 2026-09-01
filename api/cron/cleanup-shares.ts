@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { timingSafeEqual } from 'crypto'
+import { requireCronSecret } from '../_shared/rate-limit.js'
 import { getOrphanedSamples, deleteSampleDocs } from '../_shared/db.js'
 import { deleteSamples } from '../_shared/gcs.js'
 
@@ -13,14 +13,7 @@ export const config = { maxDuration: 60 }
  * with refCount <= 0, deletes them from GCS, then removes the Firestore docs.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  const authHeader = req.headers.authorization ?? ''
-  const expected = `Bearer ${process.env.CRON_SECRET?.trim() ?? ''}`
-  const a = Buffer.from(authHeader)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length || !timingSafeEqual(a, b)) {
-    res.status(401).json({ error: 'Unauthorized.' })
-    return
-  }
+  if (requireCronSecret(req, res)) return
 
   try {
     const orphaned = await getOrphanedSamples()

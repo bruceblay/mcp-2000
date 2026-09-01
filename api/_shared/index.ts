@@ -52,7 +52,7 @@ const sequencePadContextSchema = z.object({
 })
 
 export const requestSchema = z.object({
-  prompt: z.string().min(1),
+  prompt: z.string().min(1).max(1000),
   bankId: z.enum(['A', 'B', 'C', 'D']).optional(),
   mode: z.enum(['kit', 'pad', 'loop', 'sequence', 'random-sequence']).default('kit'),
   selectedPadId: z.string().optional(),

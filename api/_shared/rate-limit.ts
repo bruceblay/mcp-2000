@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { timingSafeEqual } from 'crypto'
 
 // ---------------------------------------------------------------------------
 // Client IP extraction
@@ -83,6 +84,35 @@ export const applyRateLimit = (
 
   if (!checkRateLimit(key, config)) {
     res.status(429).json({ error: 'Too many requests. Try again later.' })
+    return true
+  }
+
+  return false
+}
+
+// ---------------------------------------------------------------------------
+// Shared-secret auth for cron and admin endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * Require a valid `Authorization: Bearer <CRON_SECRET>` header.
+ * Returns true if the request was rejected (response already sent).
+ *
+ * Fails closed when CRON_SECRET is unset, otherwise the expected value would
+ * be the bare string "Bearer " and anyone sending that header would pass.
+ */
+export const requireCronSecret = (req: VercelRequest, res: VercelResponse): boolean => {
+  const secret = process.env.CRON_SECRET?.trim()
+  if (!secret) {
+    console.error('CRON_SECRET is not set. Refusing the request.')
+    res.status(500).json({ error: 'Server misconfigured.' })
+    return true
+  }
+
+  const provided = Buffer.from(req.headers.authorization ?? '')
+  const expected = Buffer.from(`Bearer ${secret}`)
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+    res.status(401).json({ error: 'Unauthorized.' })
     return true
   }
 

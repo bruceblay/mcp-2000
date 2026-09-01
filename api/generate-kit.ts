@@ -21,20 +21,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (applyRateLimit(req, res, 'generate-kit', RATE_LIMIT)) return
 
   try {
-    const parsedRequest = requestSchema.parse(req.body)
+    const parseResult = requestSchema.safeParse(req.body)
+    if (!parseResult.success) {
+      res.status(400).json({ error: 'Invalid request. Check the prompt length and mode.' })
+      return
+    }
+    const parsedRequest = parseResult.data
     const mode = parsedRequest.mode === 'random-sequence' ? 'generate-sequence' as const
       : parsedRequest.mode === 'sequence' ? 'generate-sequence' as const
       : parsedRequest.mode === 'loop' ? 'generate-loop' as const
       : parsedRequest.mode === 'pad' ? 'generate-pad' as const
       : 'generate-kit' as const
 
-    const usesElevenLabs = mode !== 'generate-sequence'
-    if (usesElevenLabs) {
-      const allowed = await checkAndIncrementGenerationBudget(getClientIp(req))
-      if (!allowed) {
-        res.status(429).json({ error: 'Daily generation limit reached. Come back tomorrow.' })
-        return
-      }
+    // Sequence modes are Claude-only; everything else also renders audio.
+    const budgetKind = mode === 'generate-sequence' ? 'text' as const : 'audio' as const
+    const allowed = await checkAndIncrementGenerationBudget(getClientIp(req), budgetKind)
+    if (!allowed) {
+      res.status(429).json({ error: 'Daily generation limit reached. Come back tomorrow.' })
+      return
     }
 
     logPrompt(mode, parsedRequest.prompt, { bankId: parsedRequest.bankId, mode: parsedRequest.mode })

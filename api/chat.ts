@@ -43,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     model: anthropic('claude-haiku-4-5-20251001'),
     system: CHAT_SYSTEM_PROMPT,
     messages,
+    maxOutputTokens: 1000,
   })
 
   res.setHeader('Content-Type', 'text/event-stream')

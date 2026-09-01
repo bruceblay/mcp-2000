@@ -224,21 +224,37 @@ export const decrementSampleRefs = async (sampleHashes: string[]) => {
 
 const generationBudgets = () => getDb().collection('generation_budgets')
 
-const DAILY_GENERATION_LIMIT = 5
+/**
+ * Daily per-IP caps. Audio generation hits ElevenLabs and is the expensive
+ * one; text generation is a Claude-only call (sequences), so it gets a much
+ * looser cap that still stops someone running the endpoint as a free LLM.
+ */
+export type GenerationBudgetKind = 'audio' | 'text'
 
-export const checkAndIncrementGenerationBudget = async (ip: string): Promise<boolean> => {
+const DAILY_GENERATION_LIMITS: Record<GenerationBudgetKind, number> = {
+  audio: 5,
+  text: 50,
+}
+
+export const checkAndIncrementGenerationBudget = async (
+  ip: string,
+  kind: GenerationBudgetKind = 'audio',
+): Promise<boolean> => {
   const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD UTC
-  const docRef = generationBudgets().doc(`${ip}:${today}`)
+  // Audio keeps the original unsuffixed key so existing counters stay valid.
+  const docId = kind === 'audio' ? `${ip}:${today}` : `${ip}:${kind}:${today}`
+  const docRef = generationBudgets().doc(docId)
 
   return getDb().runTransaction(async (tx) => {
     const doc = await tx.get(docRef)
     const count = doc.exists ? (doc.data()!.count as number) : 0
 
-    if (count >= DAILY_GENERATION_LIMIT) return false
+    if (count >= DAILY_GENERATION_LIMITS[kind]) return false
 
     tx.set(docRef, {
       count: count + 1,
       ip,
+      kind,
       date: today,
       expiresAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
     }, { merge: true })
