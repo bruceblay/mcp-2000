@@ -11,12 +11,12 @@ export const bitcrusherConfig: EffectConfig = {
       min: 1,
       max: 16,
       step: 1,
-      default: 4,
+      default: 8,
       unit: 'bits'
     },
     {
       key: 'normalRange',
-      label: 'Sample Rate',
+      label: 'Downsample',
       min: 0,
       max: 1,
       step: 0.01,
@@ -29,14 +29,14 @@ export const bitcrusherConfig: EffectConfig = {
       min: 0,
       max: 1,
       step: 0.01,
-      default: 1.0,
+      default: 0.5,
       unit: '%'
     }
   ],
   defaultValues: {
-    bits: 4,
+    bits: 8,
     normalRange: 0.4,
-    wet: 1.0
+    wet: 0.5
   },
   sliderColor: '#E74C3C' // Red for digital/lo-fi
 }

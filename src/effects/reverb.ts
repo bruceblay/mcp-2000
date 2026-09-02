@@ -36,7 +36,7 @@ export const reverbConfig: EffectConfig = {
   defaultValues: {
     roomSize: 0.7,
     decay: 2.0,
-    wet: 0.5
+    wet: 0.3
   },
   sliderColor: '#4A90E2' // Boss RV-6 blue
 }

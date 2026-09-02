@@ -18,20 +18,16 @@ export const formatEffectParamValue = (parameter: EffectConfig['parameters'][num
     return ['1/32', '1/16', '1/8', '1/4', '1/2'][Math.max(0, Math.min(4, Math.round(value)))] ?? '1/8'
   }
 
-  if (parameter.key === 'triggerMode') {
-    return ['Continuous', 'Triggered'][Math.max(0, Math.min(1, Math.round(value)))] ?? 'Continuous'
-  }
-
   if (parameter.key === 'mode') {
     return ['Stop', 'Stop/Restart', 'Continuous'][Math.max(0, Math.min(2, Math.round(value)))] ?? 'Continuous'
   }
 
   if (parameter.unit === '%') {
-    return `${Math.round(value * 100)}%`
+    return `${Math.round(parameter.max > 1 ? value : value * 100)}%`
   }
 
   if (parameter.unit === 's') {
-    return `${value.toFixed(2)}s`
+    return value < 1 ? `${Math.round(value * 1000)} ms` : `${Number(value.toFixed(1))} s`
   }
 
   if (parameter.unit === 'ms') {
@@ -43,7 +39,10 @@ export const formatEffectParamValue = (parameter: EffectConfig['parameters'][num
   }
 
   if (parameter.unit === 'Hz') {
-    return `${Math.round(value)} Hz`
+    if (value >= 1000) {
+      return `${Number((value / 1000).toFixed(1))} kHz`
+    }
+    return `${value < 10 ? Number(value.toFixed(1)) : Math.round(value)} Hz`
   }
 
   if (parameter.unit === 'bpm') {
@@ -68,6 +67,10 @@ export const formatEffectParamValue = (parameter: EffectConfig['parameters'][num
 
   if (parameter.unit === ':1') {
     return `${value.toFixed(1)}:1`
+  }
+
+  if (parameter.unit === 'Q') {
+    return `Q ${Number(value.toFixed(1))}`
   }
 
   return Number.isInteger(value) ? String(value) : value.toFixed(2)

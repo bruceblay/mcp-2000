@@ -29,7 +29,7 @@ export const distortionConfig: EffectConfig = {
       min: 0,
       max: 1,
       step: 0.01,
-      default: 0.8,
+      default: 0.5,
       unit: '%'
     }
   ],

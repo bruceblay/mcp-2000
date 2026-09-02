@@ -66,8 +66,6 @@ export const sequenceLengthOptions = [8, 16, 24, 32] as const
 export const sequenceLookaheadMs = 25
 export const sequenceScheduleAheadSeconds = 0.12
 
-export const supportedGlobalEffectIds = new Set(['simplefilter', 'delay', 'distortion', 'bitcrusher', 'reverb', 'compressor', 'autofilter', 'autopanner', 'chorus', 'combfilter', 'djeq', 'flanger', 'hallreverb', 'loopchop', 'phaser', 'pitchshifter', 'ringmodulator', 'sidechainpump', 'tapestop', 'taptempodelay', 'tremolo', 'vibrato', 'lofitape'])
-
 export const lfoWaveforms: OscillatorType[] = ['sine', 'square', 'sawtooth', 'triangle']
 
 export const arpDivisionOptions: { value: import('./types').ArpDivision; label: string; beatFraction: number }[] = [

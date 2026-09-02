@@ -43,8 +43,8 @@ export const vibratoConfig: EffectConfig = {
     }
   ],
   defaultValues: {
-    rate: 1.2,
-    depth: 0.4,
+    rate: 5.0,
+    depth: 0.3,
     type: 0,
     wet: 1.0
   },

@@ -34,10 +34,9 @@ export const delayConfig: EffectConfig = {
     }
   ],
   defaultValues: {
-    delayTime: 0.2,
-    feedback: 0.5,
-    stereoSpread: 1.0,
-    wet: 0.7
+    delayTime: 0.25,
+    feedback: 0.3,
+    wet: 0.4
   },
   sliderColor: '#50C878' // Boss DD-7 green
 }

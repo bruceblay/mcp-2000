@@ -11,7 +11,7 @@ export const chorusConfig: EffectConfig = {
       min: 0.1,
       max: 10,
       step: 0.1,
-      default: 2.0,
+      default: 1.0,
       unit: 'Hz'
     },
     {
@@ -20,16 +20,16 @@ export const chorusConfig: EffectConfig = {
       min: 0,
       max: 1,
       step: 0.01,
-      default: 0.6,
+      default: 0.35,
       unit: '%'
     },
     {
       key: 'delay',
       label: 'Delay Time',
       min: 2,
-      max: 20,
+      max: 30,
       step: 0.1,
-      default: 5,
+      default: 14,
       unit: 'ms'
     },
     {
@@ -38,15 +38,15 @@ export const chorusConfig: EffectConfig = {
       min: 0,
       max: 1,
       step: 0.01,
-      default: 0.7,
+      default: 0.5,
       unit: '%'
     }
   ],
   defaultValues: {
     rate: 1.0,
-    depth: 0.07,
-    delay: 5,
-    wet: 0.9
+    depth: 0.35,
+    delay: 14,
+    wet: 0.5
   },
   sliderColor: '#87CEEB' // Boss CE-2 light blue
 }

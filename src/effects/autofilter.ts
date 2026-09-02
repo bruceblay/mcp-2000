@@ -11,7 +11,7 @@ export const autoFilterConfig: EffectConfig = {
       min: 0.1,
       max: 10,
       step: 0.1,
-      default: 1.0,
+      default: 5.0,
       unit: 'Hz'
     },
     {
@@ -29,7 +29,7 @@ export const autoFilterConfig: EffectConfig = {
       min: 100,
       max: 2000,
       step: 10,
-      default: 200,
+      default: 990,
       unit: 'Hz'
     },
     {
@@ -38,7 +38,7 @@ export const autoFilterConfig: EffectConfig = {
       min: 1,
       max: 6,
       step: 0.5,
-      default: 3.0,
+      default: 1.0,
       unit: ''
     },
     {

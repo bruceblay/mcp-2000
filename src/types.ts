@@ -51,11 +51,15 @@ export type BitcrusherProcessorNode = ScriptProcessorNode & {
 }
 
 export type LoopChopProcessorNode = ScriptProcessorNode & {
-  _updateSettings?: (loopSize: number, stutterRate: number) => void
+  _updateSettings?: (loopSize: number, stutterRate: number, tempo: number) => void
 }
 
 export type TapeStopProcessorNode = ScriptProcessorNode & {
   _updateSettings?: (stopTime: number, restartTime: number, mode: number) => void
+}
+
+export type SidechainPumpProcessorNode = ScriptProcessorNode & {
+  _updateSettings?: (filterFreq: number, sensitivity: number, depth: number, attack: number, release: number) => void
 }
 
 export type ActiveEffectRuntime = {

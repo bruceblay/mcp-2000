@@ -11,7 +11,7 @@ export const autoPannerConfig: EffectConfig = {
       min: 0.1,
       max: 10,
       step: 0.1,
-      default: 1.0,
+      default: 2.0,
       unit: 'Hz'
     },
     {

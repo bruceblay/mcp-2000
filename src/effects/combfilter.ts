@@ -19,7 +19,7 @@ export const combFilterConfig: EffectConfig = {
       label: 'Feedback',
       min: 0.70,
       max: 0.95,
-      step: 0.05,
+      step: 0.01,
       default: 0.7,
       unit: '%'
     },
@@ -28,7 +28,7 @@ export const combFilterConfig: EffectConfig = {
       label: 'Feedforward',
       min: 0,
       max: 1,
-      step: 0.05,
+      step: 0.01,
       default: 0.5,
       unit: '%'
     },
@@ -44,9 +44,9 @@ export const combFilterConfig: EffectConfig = {
   ],
   defaultValues: {
     delayTime: 0.01,     // 10ms delay (100Hz fundamental)
-    feedback: 0.95,       // 95% feedback for resonance
+    feedback: 0.7,       // 70% feedback for controlled resonance
     feedforward: 0.5,    // 50% feedforward
-    wet: 0.9             // 90% wet
+    wet: 0.6             // 60% wet
   },
   sliderColor: '#B8860B' // Dark goldenrod for metallic/resonant
 }

@@ -3,30 +3,31 @@ import { ChevronDown, ChevronLeft, ChevronRight, Circle, Disc, Download, Metrono
 import { type Pad } from './mock-kit'
 import { SampleWaveform } from './components/sample-waveform'
 import { ScrollPicker } from './components/ScrollPicker'
-import { getEffectDefaults, getEffectsList } from './effects'
+import { getEffectDefaults, getEffectsList, supportedEffectIds } from './effects'
 import {
   loopChopCount, midiStorageKey, midiSelectedInputStorageKey,
   groupLabels, chromaticBaseOctave, chromaticMinOctave, chromaticMaxOctave,
   chromaticKeyLayout, chromaticKeyboardMap, sequenceLookaheadMs,
-  sequenceScheduleAheadSeconds, supportedGlobalEffectIds, arpDivisionOptions, arpModeOptions,
+  sequenceScheduleAheadSeconds, arpDivisionOptions, arpModeOptions,
   performanceRecordingMaxSeconds,
 } from './constants'
 import {
   bankIds,
   type BankId, type EngineStatus, type GenerationStatus, type GenerationMode, type SequenceGenerationAction,
   type MicCaptureState, type WorkView, type EditorSource, type PlaybackMode, type RecordedTake, type GeneratedLoop,
-  type ChopRegion, type BitcrusherProcessorNode, type LoopChopProcessorNode, type TapeStopProcessorNode, type ActiveEffectRuntime,
+  type ChopRegion, type BitcrusherProcessorNode, type LoopChopProcessorNode, type TapeStopProcessorNode, type SidechainPumpProcessorNode, type ActiveEffectRuntime,
   type ActivePadAudio, type ActiveChromaticNoteAudio, type ActiveLoopPlayback, type MidiPadNoteMappings,
   type NavigatorWithMidi, type PadPlaybackSetting, type BankState, type Sequence,
   type ArpMode, type ArpDivision, type EffectChainState, type EffectChainSlotId, effectChainSlotIds,
   type BankSnapshot,
 } from './types'
 import {
-  clamp, buildDistortionCurve, buildImpulseResponse, createReversedBuffer,
+  clamp, buildDistortionCurve, buildImpulseResponse, buildTapeSaturationCurve, createReversedBuffer,
   getPadPlaybackWindow, encodeWavBlob, sanitizeDownloadName, triggerBlobDownload,
   getSubdivisionSeconds, getEffectTailPaddingSeconds,
   getLoopDurationSeconds, buildChopRegions, normalizeChopRegions,
-  loadAudioDurationFromUrl, base64ToBlob, getLfoWaveform,
+  loadAudioDurationFromUrl, base64ToBlob, getAutoFilterSweep, getChorusModulationDepth,
+  getLfoWaveform, getPitchShiftSettings,
   getPreferredRecordingMimeType, getRecordingFileExtension,
 } from './audio-utils'
 import { formatClockDuration, formatChopRegionLabel, formatMidiNoteLabel } from './format-utils'
@@ -644,7 +645,7 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
     type: 'linear' | 'exponential' = 'exponential',
   ) => {
     const context = audioContextRef.current
-    if (!context || !param) {
+    if (!context || !param || !Number.isFinite(targetValue)) {
       return
     }
 
@@ -652,7 +653,7 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
     param.cancelScheduledValues(now)
     param.setValueAtTime(param.value, now)
 
-    if (type === 'exponential' && targetValue > 0.0001) {
+    if (type === 'exponential' && targetValue > 0.0001 && param.value > 0.0001) {
       param.exponentialRampToValueAtTime(targetValue, now + rampTime)
       return
     }
@@ -668,8 +669,9 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
       return
     }
 
-    smoothEffectParam(wetGain.gain, wetValue, 0.015, 'linear')
-    smoothEffectParam(dryGain.gain, 1 - wetValue, 0.015, 'linear')
+    const mixLaw = refs.mixLaw === 'equalPower' ? 'equalPower' : 'linear'
+    smoothEffectParam(wetGain.gain, mixLaw === 'equalPower' ? Math.sqrt(wetValue) : wetValue, 0.015, 'linear')
+    smoothEffectParam(dryGain.gain, mixLaw === 'equalPower' ? Math.sqrt(1 - wetValue) : 1 - wetValue, 0.015, 'linear')
   }
 
   const syncActivePadMix = (padId: string, nextValues: Partial<Pick<PadPlaybackSetting, 'gain' | 'pan'>>) => {
@@ -766,7 +768,7 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
         masterGain: output,
         effectId: chainState.effectId,
         effectEnabled: chainState.enabled,
-        isEffectSupported: supportedGlobalEffectIds.has(chainState.effectId),
+        isEffectSupported: supportedEffectIds.has(chainState.effectId),
         effectParams: chainState.params,
       })
       effectCleanupsRef.current[slotId] = routing.cleanup
@@ -829,8 +831,8 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
         if (didChange('cutoffFreq', 2000)) {
           smoothEffectParam(filter.frequency, clamp(state.params.cutoffFreq ?? 2000, 20, 20000), 0.03)
         }
-        if (didChange('resonance', 5)) {
-          smoothEffectParam(filter.Q, clamp(state.params.resonance ?? 5, 0.0001, 30), 0.02, 'linear')
+        if (didChange('resonance', 15)) {
+          smoothEffectParam(filter.Q, clamp(state.params.resonance ?? 15, 0.0001, 30), 0.02, 'linear')
         }
         continue
       }
@@ -847,11 +849,13 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
           smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 5, 0.1, 10), 0.02)
         }
         if (didChange('baseFreq', 990) || didChange('depth', 0.8) || didChange('octaves', 1)) {
-          const baseFreq = clamp(state.params.baseFreq ?? 990, 20, 12000)
-          const depth = clamp(state.params.depth ?? 0.8, 0, 1)
-          const octaves = clamp(state.params.octaves ?? 1, 1, 6)
-          smoothEffectParam(filter.frequency, baseFreq, 0.03)
-          smoothEffectParam(lfoGain.gain, baseFreq * (Math.pow(2, octaves) - 1) * depth, 0.03, 'linear')
+          const { centerFrequency, modulationDepth } = getAutoFilterSweep(
+            state.params.baseFreq ?? 990,
+            state.params.octaves ?? 1,
+            state.params.depth ?? 0.8,
+          )
+          smoothEffectParam(filter.frequency, centerFrequency, 0.03)
+          smoothEffectParam(lfoGain.gain, modulationDepth, 0.03, 'linear')
         }
         continue
       }
@@ -878,11 +882,11 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
       if (state.effectId === 'delay') {
         const delay = refs.delay as DelayNode | undefined
         const feedbackGain = refs.feedbackGain as GainNode | undefined
-        if (delay && didChange('delayTime', 0.2)) {
-          smoothEffectParam(delay.delayTime, clamp(state.params.delayTime ?? 0.2, 0.01, 2), 0.05, 'linear')
+        if (delay && didChange('delayTime', 0.25)) {
+          smoothEffectParam(delay.delayTime, clamp(state.params.delayTime ?? 0.25, 0.01, 2), 0.05, 'linear')
         }
-        if (feedbackGain && didChange('feedback', 0.5)) {
-          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.5, 0, 0.95), 0.015, 'linear')
+        if (feedbackGain && didChange('feedback', 0.3)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.3, 0, 0.95), 0.015, 'linear')
         }
         continue
       }
@@ -906,15 +910,15 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
           shaper.curve = buildDistortionCurve(clamp(state.params.amount ?? 0.5, 0, 1))
         }
         if (toneFilter && didChange('tone', 0.5)) {
-          smoothEffectParam(toneFilter.frequency, 700 + clamp(state.params.tone ?? 0.5, 0, 1) * 7300, 0.025)
+          smoothEffectParam(toneFilter.frequency, 2000 + clamp(state.params.tone ?? 0.5, 0, 1) * 8000, 0.025)
         }
         continue
       }
 
       if (state.effectId === 'bitcrusher') {
         const crusher = refs.crusher as BitcrusherProcessorNode | undefined
-        if (crusher?._updateSettings && (didChange('bits', 4) || didChange('normalRange', 0.4))) {
-          crusher._updateSettings(state.params.bits ?? 4, state.params.normalRange ?? 0.4)
+        if (crusher?._updateSettings && (didChange('bits', 8) || didChange('normalRange', 0.4))) {
+          crusher._updateSettings(state.params.bits ?? 8, state.params.normalRange ?? 0.4)
         }
         continue
       }
@@ -935,7 +939,7 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
           smoothEffectParam(preDelay.delayTime, clamp(state.params.preDelay ?? 0.03, 0, 1), 0.03, 'linear')
         }
         if (convolver && (didChange('roomSize', 0.8) || didChange('decay', 4))) {
-          convolver.buffer = buildImpulseResponse(context, clamp(state.params.roomSize ?? 0.8, 0, 1), clamp(state.params.decay ?? 4, 0.2, 10))
+          convolver.buffer = buildImpulseResponse(context, clamp(state.params.roomSize ?? 0.8, 0, 1), clamp(state.params.decay ?? 4, 0.2, 10), 'hall')
         }
         if (damping && didChange('damping', 6000)) {
           smoothEffectParam(damping.frequency, clamp(state.params.damping ?? 6000, 500, 12000), 0.03)
@@ -977,7 +981,34 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
         continue
       }
 
-      if (state.effectId === 'chorus' || state.effectId === 'vibrato' || state.effectId === 'pitchshifter') {
+      if (state.effectId === 'chorus') {
+        const delay1 = refs.delay1 as DelayNode | undefined
+        const delay2 = refs.delay2 as DelayNode | undefined
+        const lfo1 = refs.lfo1 as OscillatorNode | undefined
+        const lfo2 = refs.lfo2 as OscillatorNode | undefined
+        const lfoGain1 = refs.lfoGain1 as GainNode | undefined
+        const lfoGain2 = refs.lfoGain2 as GainNode | undefined
+        if (!delay1 || !delay2 || !lfo1 || !lfo2 || !lfoGain1 || !lfoGain2) {
+          continue
+        }
+
+        const rate = clamp(state.params.rate ?? 1, 0.1, 10)
+        const delayMs = clamp(state.params.delay ?? 14, 2, 30)
+        const depth = clamp(state.params.depth ?? 0.35, 0, 1)
+        if (didChange('rate', 1)) {
+          smoothEffectParam(lfo1.frequency, rate, 0.02)
+          smoothEffectParam(lfo2.frequency, rate * 1.23, 0.02)
+        }
+        if (didChange('delay', 14) || didChange('depth', 0.35)) {
+          smoothEffectParam(delay1.delayTime, delayMs / 1000, 0.03, 'linear')
+          smoothEffectParam(delay2.delayTime, (delayMs * 1.5) / 1000, 0.03, 'linear')
+          smoothEffectParam(lfoGain1.gain, getChorusModulationDepth(delayMs, depth), 0.02, 'linear')
+          smoothEffectParam(lfoGain2.gain, getChorusModulationDepth(delayMs * 1.5, depth) * 0.8, 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'vibrato') {
         const delay = refs.delay as DelayNode | undefined
         const lfo = refs.lfo as OscillatorNode | undefined
         const lfoGain = refs.lfoGain as GainNode | undefined
@@ -988,24 +1019,36 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
         if (didChange('type', 0)) {
           lfo.type = getLfoWaveform(state.params.type ?? 0)
         }
-        if (didChange('rate', 1.2)) {
-          smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 1.2, 0.1, 20), 0.02)
+        if (didChange('rate', 5)) {
+          smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 5, 0.1, 20), 0.02)
         }
-        if (
-          didChange('delay', 5) ||
-          didChange('depth', 0.4) ||
-          didChange('pitch', 0)
-        ) {
-          const baseDelay = state.effectId === 'pitchshifter'
-            ? 0.02 + clamp(Math.abs(state.params.pitch ?? 0), 0, 12) * 0.0012
-            : state.effectId === 'vibrato'
-              ? 0.008
-              : clamp((state.params.delay ?? 5) / 1000, 0.002, 0.03)
-          const depth = state.effectId === 'pitchshifter'
-            ? 0.001 + clamp(Math.abs(state.params.pitch ?? 0), 0, 12) * 0.0005
-            : clamp(state.params.depth ?? 0.4, 0, 1) * 0.004
-          smoothEffectParam(delay.delayTime, baseDelay, 0.03, 'linear')
-          smoothEffectParam(lfoGain.gain, depth, 0.02, 'linear')
+        if (didChange('depth', 0.3)) {
+          smoothEffectParam(lfoGain.gain, clamp(state.params.depth ?? 0.3, 0, 1) * 0.01, 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'pitchshifter') {
+        const delay1 = refs.delay1 as DelayNode | undefined
+        const delay2 = refs.delay2 as DelayNode | undefined
+        const ramp1 = refs.ramp1 as OscillatorNode | undefined
+        const ramp2 = refs.ramp2 as OscillatorNode | undefined
+        const rampDepth1 = refs.rampDepth1 as GainNode | undefined
+        const rampDepth2 = refs.rampDepth2 as GainNode | undefined
+        const windowOscillator = refs.windowOscillator as OscillatorNode | undefined
+        if (!delay1 || !delay2 || !ramp1 || !ramp2 || !rampDepth1 || !rampDepth2 || !windowOscillator) {
+          continue
+        }
+
+        if (didChange('pitch', 2) || didChange('windowSize', 0.05)) {
+          const settings = getPitchShiftSettings(state.params.pitch ?? 2, state.params.windowSize ?? 0.05)
+          smoothEffectParam(delay1.delayTime, settings.window, 0.03, 'linear')
+          smoothEffectParam(delay2.delayTime, settings.window, 0.03, 'linear')
+          smoothEffectParam(ramp1.frequency, settings.rate, 0.03, 'linear')
+          smoothEffectParam(ramp2.frequency, settings.rate, 0.03, 'linear')
+          smoothEffectParam(windowOscillator.frequency, settings.rate, 0.03, 'linear')
+          smoothEffectParam(rampDepth1.gain, settings.sweep, 0.03, 'linear')
+          smoothEffectParam(rampDepth2.gain, settings.sweep, 0.03, 'linear')
         }
         continue
       }
@@ -1033,11 +1076,11 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
         if (lfo && didChange('rate', 1)) {
           smoothEffectParam(lfo.frequency, clamp(state.params.rate ?? 1, 0.1, 5), 0.02)
         }
-        if (lfoGain && didChange('depth', 0.4)) {
-          smoothEffectParam(lfoGain.gain, 1200 * clamp(state.params.depth ?? 0.4, 0, 1), 0.02, 'linear')
+        if (lfoGain && didChange('depth', 0.7)) {
+          smoothEffectParam(lfoGain.gain, 500 * clamp(state.params.depth ?? 0.7, 0, 1), 0.02, 'linear')
         }
-        if (feedbackGain && didChange('feedback', 0.7)) {
-          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.7, 0, 0.9), 0.015, 'linear')
+        if (feedbackGain && didChange('feedback', 0.3)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.3, 0, 0.9), 0.015, 'linear')
         }
         continue
       }
@@ -1049,8 +1092,8 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
         if (delay && didChange('delayTime', 0.01)) {
           smoothEffectParam(delay.delayTime, clamp(state.params.delayTime ?? 0.01, 0.001, 0.05), 0.03, 'linear')
         }
-        if (feedbackGain && didChange('feedback', 0.95)) {
-          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.95, 0, 0.98), 0.015, 'linear')
+        if (feedbackGain && didChange('feedback', 0.7)) {
+          smoothEffectParam(feedbackGain.gain, clamp(state.params.feedback ?? 0.7, 0, 0.98), 0.015, 'linear')
         }
         if (feedforwardGain && didChange('feedforward', 0.5)) {
           smoothEffectParam(feedforwardGain.gain, clamp(state.params.feedforward ?? 0.5, 0, 1), 0.015, 'linear')
@@ -1060,46 +1103,76 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
 
       if (state.effectId === 'ringmodulator') {
         const carrier = refs.carrier as OscillatorNode | undefined
-        const carrierGain = refs.carrierGain as GainNode | undefined
+        const directMixGain = refs.directMixGain as GainNode | undefined
+        const ringMixGain = refs.ringMixGain as GainNode | undefined
         if (carrier && didChange('waveform', 0)) {
           carrier.type = getLfoWaveform(state.params.waveform ?? 0)
         }
         if (carrier && didChange('carrierFreq', 200)) {
           smoothEffectParam(carrier.frequency, clamp(state.params.carrierFreq ?? 200, 10, 2000), 0.02)
         }
-        if (carrierGain && didChange('mix', 50)) {
-          smoothEffectParam(carrierGain.gain, clamp((state.params.mix ?? 50) / 100, 0, 1), 0.015, 'linear')
+        if (directMixGain && ringMixGain && didChange('mix', 50)) {
+          const mix = clamp((state.params.mix ?? 50) / 100, 0, 1)
+          smoothEffectParam(directMixGain.gain, Math.sqrt(1 - mix), 0.015, 'linear')
+          smoothEffectParam(ringMixGain.gain, Math.sqrt(2 * mix), 0.015, 'linear')
         }
         continue
       }
 
       if (state.effectId === 'loopchop') {
         const processor = refs.processor as LoopChopProcessorNode | undefined
-        if (processor?._updateSettings && (didChange('loopSize', 2) || didChange('stutterRate', 4))) {
-          processor._updateSettings(state.params.loopSize ?? 2, state.params.stutterRate ?? 4)
+        if (processor?._updateSettings && (didChange('loopSize', 2) || didChange('stutterRate', 4) || didChange('tempo', 120))) {
+          processor._updateSettings(state.params.loopSize ?? 2, state.params.stutterRate ?? 4, state.params.tempo ?? 120)
         }
         continue
       }
 
-      if (state.effectId === 'tremolo' || state.effectId === 'sidechainpump') {
+      if (state.effectId === 'tremolo') {
         const lfo = refs.lfo as OscillatorNode | undefined
         const lfoGain = refs.lfoGain as GainNode | undefined
-        const offset = refs.offset as ConstantSourceNode | undefined
-        if (!lfo || !lfoGain || !offset) {
+        const ampLeft = refs.ampLeft as GainNode | undefined
+        const ampRight = refs.ampRight as GainNode | undefined
+        const spreadDelay = refs.spreadDelay as DelayNode | undefined
+        if (!lfo || !lfoGain || !ampLeft || !ampRight || !spreadDelay) {
           continue
         }
 
-        const depth = clamp(state.params.depth ?? 0.8, 0, 1)
-        const rate = state.effectId === 'tremolo'
-          ? clamp(state.params.rate ?? 6, 0.1, 20)
-          : clamp(0.75 + (state.params.sensitivity ?? 0.1) * 12, 0.5, 8)
+        const depth = clamp(state.params.depth ?? 0.7, 0, 1)
+        const rate = clamp(state.params.rate ?? 6, 0.1, 20)
 
-        if (didChange('rate', 6) || didChange('sensitivity', 0.1)) {
+        if (didChange('rate', 6)) {
           smoothEffectParam(lfo.frequency, rate, 0.02)
         }
-        if (didChange('depth', 0.8)) {
+        if (didChange('rate', 6) || didChange('spread', 40)) {
+          smoothEffectParam(spreadDelay.delayTime, (clamp(state.params.spread ?? 40, 0, 180) / 360) / rate, 0.03, 'linear')
+        }
+        if (didChange('depth', 0.7)) {
           smoothEffectParam(lfoGain.gain, depth / 2, 0.02, 'linear')
-          smoothEffectParam(offset.offset, 1 - depth / 2, 0.02, 'linear')
+          smoothEffectParam(ampLeft.gain, 1 - depth / 2, 0.02, 'linear')
+          smoothEffectParam(ampRight.gain, 1 - depth / 2, 0.02, 'linear')
+        }
+        continue
+      }
+
+      if (state.effectId === 'sidechainpump') {
+        const processor = refs.processor as SidechainPumpProcessorNode | undefined
+        if (
+          processor?._updateSettings &&
+          (
+            didChange('filterFreq', 100) ||
+            didChange('sensitivity', 0.1) ||
+            didChange('depth', 0.8) ||
+            didChange('attack', 0.005) ||
+            didChange('release', 0.25)
+          )
+        ) {
+          processor._updateSettings(
+            state.params.filterFreq ?? 100,
+            state.params.sensitivity ?? 0.1,
+            state.params.depth ?? 0.8,
+            state.params.attack ?? 0.005,
+            state.params.release ?? 0.25,
+          )
         }
         continue
       }
@@ -1115,20 +1188,20 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
       if (state.effectId === 'lofitape') {
         const shaper = refs.shaper as WaveShaperNode | undefined
         const tone = refs.tone as BiquadFilterNode | undefined
-        const lfo = refs.lfo as OscillatorNode | undefined
-        const lfoGain = refs.lfoGain as GainNode | undefined
+        const flutterLfo = refs.flutterLfo as OscillatorNode | undefined
+        const wowGain = refs.wowGain as GainNode | undefined
         const noiseGain = refs.noiseGain as GainNode | undefined
         if (shaper && didChange('saturation', 0.4)) {
-          shaper.curve = buildDistortionCurve(clamp(state.params.saturation ?? 0.4, 0, 1))
+          shaper.curve = buildTapeSaturationCurve(state.params.saturation ?? 0.4)
         }
         if (tone && didChange('toneRolloff', 6000)) {
           smoothEffectParam(tone.frequency, clamp(state.params.toneRolloff ?? 6000, 500, 12000), 0.03)
         }
-        if (lfo && didChange('flutterRate', 6)) {
-          smoothEffectParam(lfo.frequency, clamp(state.params.flutterRate ?? 6, 0.1, 20), 0.02)
+        if (flutterLfo && didChange('flutterRate', 6)) {
+          smoothEffectParam(flutterLfo.frequency, clamp(state.params.flutterRate ?? 6, 0.1, 20), 0.02)
         }
-        if (lfoGain && didChange('wowDepth', 0.3)) {
-          smoothEffectParam(lfoGain.gain, clamp(state.params.wowDepth ?? 0.3, 0, 1) * 0.008, 0.02, 'linear')
+        if (wowGain && didChange('wowDepth', 0.3)) {
+          smoothEffectParam(wowGain.gain, clamp(state.params.wowDepth ?? 0.3, 0, 1) * 0.008, 0.02, 'linear')
         }
         if (noiseGain && didChange('noise', 0.1)) {
           smoothEffectParam(noiseGain.gain, clamp(state.params.noise ?? 0.1, 0, 1) * 0.05, 0.02, 'linear')
@@ -1481,9 +1554,9 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
     const sampleRate = audioContextRef.current?.sampleRate ?? firstLoadedBuffer?.sampleRate ?? 44100
     const bankTails = bankIds.map((bankId) => {
       const chain = bankEffects[bankId]
-      return getEffectTailPaddingSeconds(chain.effectId, chain.params, chain.enabled, supportedGlobalEffectIds.has(chain.effectId))
+      return getEffectTailPaddingSeconds(chain.effectId, chain.params, chain.enabled, supportedEffectIds.has(chain.effectId))
     })
-    const masterTail = getEffectTailPaddingSeconds(masterEffect.effectId, masterEffect.params, masterEffect.enabled, supportedGlobalEffectIds.has(masterEffect.effectId))
+    const masterTail = getEffectTailPaddingSeconds(masterEffect.effectId, masterEffect.params, masterEffect.enabled, supportedEffectIds.has(masterEffect.effectId))
     const effectTailPaddingSeconds = Math.max(...bankTails, 0) + masterTail
     const renderedDurationSeconds = Math.max(exportStepCount * stepDurationSeconds, latestSourceEnd) + effectTailPaddingSeconds
     const frameCount = Math.max(1, Math.ceil(renderedDurationSeconds * sampleRate) + Math.ceil(sampleRate * 0.02))
@@ -1538,7 +1611,7 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
         const bankChain = bankEffects[bankId]
         const bankInput = offlineBankEffectInputs[bankId]!
         const bankOutput = offlineBankEffectOutputs[bankId]!
-        const isBankEffectSupported = supportedGlobalEffectIds.has(bankChain.effectId)
+        const isBankEffectSupported = supportedEffectIds.has(bankChain.effectId)
 
         try {
           const routing = createGlobalEffectRouting({
@@ -1561,7 +1634,7 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
       }
 
       // Apply master effect chain
-      const isMasterEffectSupported = supportedGlobalEffectIds.has(masterEffect.effectId)
+      const isMasterEffectSupported = supportedEffectIds.has(masterEffect.effectId)
       try {
         const routing = createGlobalEffectRouting({
           context: offlineContext,

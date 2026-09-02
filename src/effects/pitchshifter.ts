@@ -11,7 +11,7 @@ export const pitchShifterConfig: EffectConfig = {
       min: -12,
       max: 12,
       step: 0.1,
-      default: 0,
+      default: 2,
       unit: 'semitones'
     },
     {
@@ -19,18 +19,9 @@ export const pitchShifterConfig: EffectConfig = {
       label: 'Window Size',
       min: 0.01,
       max: 0.1,
-      step: 0.01,
+      step: 0.005,
       default: 0.05,
       unit: 's'
-    },
-    {
-      key: 'overlap',
-      label: 'Overlap',
-      min: 0.1,
-      max: 0.9,
-      step: 0.1,
-      default: 0.5,
-      unit: ''
     },
     {
       key: 'wet',
@@ -45,7 +36,6 @@ export const pitchShifterConfig: EffectConfig = {
   defaultValues: {
     pitch: 2.0,      // +2 semitones up
     windowSize: 0.05, // 50ms window
-    overlap: 0.5,     // 50% overlap
     wet: 1.0          // 100% wet
   },
   sliderColor: '#00CED1' // Boss PS-6 turquoise

@@ -1,42 +1,131 @@
-import type { WebAudioContext, BitcrusherProcessorNode, LoopChopProcessorNode, TapeStopProcessorNode, PadPlaybackSetting, ChopRegion, GeneratedLoop } from './types'
+import type { WebAudioContext, BitcrusherProcessorNode, LoopChopProcessorNode, TapeStopProcessorNode, SidechainPumpProcessorNode, PadPlaybackSetting, ChopRegion, GeneratedLoop } from './types'
 
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 
 export const buildDistortionCurve = (amount: number) => {
-  const samples = 44100
+  const samples = 8192
   const curve = new Float32Array(samples)
-  const drive = 5 + amount * 395
+  const drive = Math.pow(24, clamp(amount, 0, 1))
+  const normalization = Math.tanh(drive)
+  const referenceAmplitude = 0.28
+  const probes = 2048
+  let inputEnergy = 0
+  let outputEnergy = 0
+
+  for (let index = 0; index < probes; index += 1) {
+    const input = referenceAmplitude * Math.sin((2 * Math.PI * index) / probes)
+    const output = Math.tanh(input * drive) / normalization
+    inputEnergy += input * input
+    outputEnergy += output * output
+  }
+
+  const outputTrim = outputEnergy > 0 ? Math.sqrt(inputEnergy / outputEnergy) : 1
 
   for (let index = 0; index < samples; index += 1) {
     const x = (index * 2) / samples - 1
-    curve[index] = ((3 + drive) * x * 20 * (Math.PI / 180)) / (Math.PI + drive * Math.abs(x))
+    curve[index] = (Math.tanh(x * drive) / normalization) * outputTrim
   }
 
   return curve
 }
 
-export const buildImpulseResponse = (context: WebAudioContext, roomSize: number, decaySeconds: number) => {
+export const buildTapeSaturationCurve = (amount: number) => {
+  const samples = 8192
+  const curve = new Float32Array(samples)
+  const saturation = clamp(amount, 0, 1)
+  const drive = 1 + saturation * 4
+  const normalization = Math.tanh(drive)
+
+  for (let index = 0; index < samples; index += 1) {
+    const x = (index * 2) / samples - 1
+    curve[index] = (1 - saturation) * x + saturation * (Math.tanh(x * drive) / normalization)
+  }
+
+  return curve
+}
+
+const createSeededNoise = (seedValue: number) => {
+  let seed = seedValue >>> 0 || 0x9e3779b9
+  return () => {
+    seed ^= seed << 13
+    seed ^= seed >>> 17
+    seed ^= seed << 5
+    return (seed >>> 0) / 0xffffffff
+  }
+}
+
+export const buildImpulseResponse = (
+  context: WebAudioContext,
+  roomSize: number,
+  decaySeconds: number,
+  profile: 'room' | 'hall' = 'room',
+) => {
   const duration = Math.max(0.2, decaySeconds)
   const length = Math.max(1, Math.floor(context.sampleRate * duration))
   const impulse = context.createBuffer(2, length, context.sampleRate)
+  const normalizedRoomSize = clamp(roomSize, 0, 1)
+  const decayExponent = Math.max(1.5 - normalizedRoomSize, 0.3)
 
   for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
     const channelData = impulse.getChannelData(channel)
+    const random = createSeededNoise(
+      Math.round(context.sampleRate + duration * 997 + normalizedRoomSize * 7919 + channel * 104729 + (profile === 'hall' ? 65537 : 0)),
+    )
 
     for (let index = 0; index < length; index += 1) {
-      const t = index / length
-      const envelope = Math.pow(1 - t, Math.max(1, roomSize * 6 + 1))
-      channelData[index] = (Math.random() * 2 - 1) * envelope
+      const remaining = 1 - index / length
+      const lateReflection = (random() * 2 - 1) * Math.pow(remaining, decayExponent)
+
+      if (profile === 'hall') {
+        const earlyReflection = (random() * 2 - 1) * 0.3 * Math.pow(remaining, 0.5)
+        channelData[index] = (earlyReflection + lateReflection * 0.7) * 0.5
+      } else {
+        channelData[index] = lateReflection
+      }
     }
   }
 
   return impulse
 }
 
+export const buildNoiseBuffer = (context: WebAudioContext, durationSeconds = 2) => {
+  const length = Math.max(1, Math.floor(context.sampleRate * durationSeconds))
+  const buffer = context.createBuffer(2, length, context.sampleRate)
+
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel)
+    const random = createSeededNoise(0x51f15e + channel * 104729 + context.sampleRate)
+    for (let index = 0; index < data.length; index += 1) {
+      data[index] = random() * 2 - 1
+    }
+  }
+
+  return buffer
+}
+
+export const getChorusModulationDepth = (delayMs: number, depth: number) =>
+  Math.min(clamp(depth, 0, 1) * 0.002, clamp(delayMs, 2, 30) / 1000 * 0.8)
+
+export const getAutoFilterSweep = (baseFrequency: number, octaves: number, depth = 1) => {
+  const base = clamp(baseFrequency, 20, 12000)
+  const ceiling = Math.min(base * Math.pow(2, clamp(octaves, 1, 6)), 15000)
+  const halfRange = ((ceiling - base) / 2) * clamp(depth, 0, 1)
+  return { centerFrequency: base + (ceiling - base) / 2, modulationDepth: halfRange }
+}
+
+export const getPitchShiftSettings = (pitch: number, windowSize: number) => {
+  const window = clamp(windowSize, 0.01, 0.1)
+  return {
+    window,
+    rate: 1 / (window * 2),
+    sweep: (Math.pow(2, clamp(pitch, -12, 12) / 12) - 1) * window,
+  }
+}
+
 export const createBitcrusherNode = (context: WebAudioContext, bits: number, normalRange: number) => {
-  const processor = context.createScriptProcessor(256, 2, 2) as BitcrusherProcessorNode
-  let step = Math.pow(2, Math.max(1, Math.round(bits)) - 1)
-  let sampleRateReduction = Math.floor(normalRange * 32) + 1
+  const processor = context.createScriptProcessor(1024, 2, 2) as BitcrusherProcessorNode
+  let step = Math.pow(2, clamp(Math.round(bits), 1, 16) - 1)
+  let sampleRateReduction = Math.floor(clamp(normalRange, 0, 1) * 32) + 1
   let sampleCounter = 0
   let lastLeft = 0
   let lastRight = 0
@@ -60,22 +149,22 @@ export const createBitcrusherNode = (context: WebAudioContext, bits: number, nor
   }
 
   processor._updateSettings = (nextBits, nextNormalRange) => {
-    step = Math.pow(2, Math.max(1, Math.round(nextBits)) - 1)
-    sampleRateReduction = Math.floor(nextNormalRange * 32) + 1
+    step = Math.pow(2, clamp(Math.round(nextBits), 1, 16) - 1)
+    sampleRateReduction = Math.floor(clamp(nextNormalRange, 0, 1) * 32) + 1
   }
 
   return processor
 }
 
-export const createLoopChopNode = (context: WebAudioContext, loopSize: number, stutterRate: number) => {
-  const processor = context.createScriptProcessor(256, 2, 2) as LoopChopProcessorNode
+export const createLoopChopNode = (context: WebAudioContext, loopSize: number, stutterRate: number, tempo: number) => {
+  const processor = context.createScriptProcessor(1024, 2, 2) as LoopChopProcessorNode
 
   const loopSizes = [0.125, 0.25, 0.5, 1.0, 2.0]
-  const beatLength = 60 / 120
 
   let loopSizeIndex = Math.max(0, Math.min(4, Math.round(loopSize)))
-  let bufferSize = Math.floor(beatLength * (loopSizes[loopSizeIndex] ?? 0.5) * context.sampleRate)
-  let maxStutters = Math.max(1, Math.floor(stutterRate))
+  let currentTempo = clamp(tempo, 60, 180)
+  let bufferSize = Math.max(1, Math.floor((60 / currentTempo) * (loopSizes[loopSizeIndex] ?? 0.5) * context.sampleRate))
+  let maxStutters = clamp(Math.floor(stutterRate), 1, 16)
 
   let captureBufferL = new Float32Array(bufferSize)
   let captureBufferR = new Float32Array(bufferSize)
@@ -133,10 +222,11 @@ export const createLoopChopNode = (context: WebAudioContext, loopSize: number, s
     }
   }
 
-  processor._updateSettings = (nextLoopSize, nextStutterRate) => {
+  processor._updateSettings = (nextLoopSize, nextStutterRate, nextTempo) => {
     const nextIndex = Math.max(0, Math.min(4, Math.round(nextLoopSize)))
-    const nextBufferSize = Math.floor(beatLength * (loopSizes[nextIndex] ?? 0.5) * context.sampleRate)
-    maxStutters = Math.max(1, Math.floor(nextStutterRate))
+    currentTempo = clamp(nextTempo, 60, 180)
+    const nextBufferSize = Math.max(1, Math.floor((60 / currentTempo) * (loopSizes[nextIndex] ?? 0.5) * context.sampleRate))
+    maxStutters = clamp(Math.floor(nextStutterRate), 1, 16)
 
     if (nextBufferSize !== bufferSize) {
       bufferSize = nextBufferSize
@@ -157,13 +247,15 @@ export const createLoopChopNode = (context: WebAudioContext, loopSize: number, s
 }
 
 export const createTapeStopNode = (context: WebAudioContext, stopTime: number, restartTime: number, mode: number) => {
-  const processor = context.createScriptProcessor(256, 2, 2) as TapeStopProcessorNode
+  const processor = context.createScriptProcessor(1024, 2, 2) as TapeStopProcessorNode
 
-  const bufferLength = context.sampleRate * 2
+  const bufferLength = Math.floor(context.sampleRate * 4)
   const bufferL = new Float32Array(bufferLength)
   const bufferR = new Float32Array(bufferLength)
   let writeIndex = 0
-  let readPosition = 0.0
+  // Stay one sample behind the writer so normal-speed playback begins with
+  // live audio instead of reading several seconds of an empty circular buffer.
+  let readPosition = bufferLength - 1
   let playbackRate = 1.0
   let phase: 'stopping' | 'stopped' | 'restarting' | 'playing' = 'stopping'
   let phaseTimer = 0
@@ -262,6 +354,68 @@ export const createTapeStopNode = (context: WebAudioContext, stopTime: number, r
     currentStopTime = Math.max(0.1, nextStopTime)
     currentRestartTime = Math.max(0.1, nextRestartTime)
     currentMode = Math.max(0, Math.min(2, Math.round(nextMode)))
+  }
+
+  return processor
+}
+
+export const createSidechainPumpNode = (
+  context: WebAudioContext,
+  filterFreq: number,
+  sensitivity: number,
+  depth: number,
+  attack: number,
+  release: number,
+) => {
+  const processor = context.createScriptProcessor(1024, 2, 2) as SidechainPumpProcessorNode
+  let currentFilterFreq = clamp(filterFreq, 40, 200)
+  let currentSensitivity = clamp(sensitivity, 0.01, 0.5)
+  let currentDepth = clamp(depth, 0, 1)
+  let currentAttack = clamp(attack, 0.001, 0.05)
+  let currentRelease = clamp(release, 0.05, 0.8)
+  let filterStage1 = 0
+  let filterStage2 = 0
+  let envelope = 0
+  let duckGain = 1
+
+  processor.onaudioprocess = (event) => {
+    const inputLeft = event.inputBuffer.getChannelData(0)
+    const inputRight = event.inputBuffer.numberOfChannels > 1 ? event.inputBuffer.getChannelData(1) : inputLeft
+    const outputLeft = event.outputBuffer.getChannelData(0)
+    const outputRight = event.outputBuffer.numberOfChannels > 1 ? event.outputBuffer.getChannelData(1) : outputLeft
+    const sampleRate = context.sampleRate
+    const filterCoefficient = Math.exp((-2 * Math.PI * currentFilterFreq) / sampleRate)
+    const envelopeAttack = Math.exp(-1 / (currentAttack * sampleRate))
+    const envelopeRelease = Math.exp(-1 / (currentRelease * sampleRate))
+    const gainAttack = Math.exp(-1 / (0.001 * sampleRate))
+    const gainRelease = Math.exp(-1 / (currentRelease * sampleRate))
+
+    for (let index = 0; index < inputLeft.length; index += 1) {
+      const monoInput = (inputLeft[index] + inputRight[index]) * 0.5
+      filterStage1 = filterStage1 * filterCoefficient + monoInput * (1 - filterCoefficient)
+      filterStage2 = filterStage2 * filterCoefficient + filterStage1 * (1 - filterCoefficient)
+      const rectified = Math.abs(filterStage2)
+      const envelopeCoefficient = rectified > envelope ? envelopeAttack : envelopeRelease
+      envelope = envelopeCoefficient * envelope + (1 - envelopeCoefficient) * rectified
+
+      const overThreshold = envelope > currentSensitivity
+        ? Math.min((envelope - currentSensitivity) / currentSensitivity, 1)
+        : 0
+      const targetGain = 1 - currentDepth * overThreshold
+      const gainCoefficient = targetGain < duckGain ? gainAttack : gainRelease
+      duckGain = gainCoefficient * duckGain + (1 - gainCoefficient) * targetGain
+
+      outputLeft[index] = inputLeft[index] * duckGain
+      outputRight[index] = inputRight[index] * duckGain
+    }
+  }
+
+  processor._updateSettings = (nextFilterFreq, nextSensitivity, nextDepth, nextAttack, nextRelease) => {
+    currentFilterFreq = clamp(nextFilterFreq, 40, 200)
+    currentSensitivity = clamp(nextSensitivity, 0.01, 0.5)
+    currentDepth = clamp(nextDepth, 0, 1)
+    currentAttack = clamp(nextAttack, 0.001, 0.05)
+    currentRelease = clamp(nextRelease, 0.05, 0.8)
   }
 
   return processor
@@ -382,7 +536,7 @@ export const getEffectTailPaddingSeconds = (
   }
 
   if (effectId === 'delay') {
-    return clamp((effectParams.delayTime ?? 0.2) * (4 + clamp(effectParams.feedback ?? 0.5, 0, 0.95) * 8), 1, 8)
+    return clamp((effectParams.delayTime ?? 0.25) * (4 + clamp(effectParams.feedback ?? 0.3, 0, 0.95) * 8), 1, 8)
   }
 
   if (effectId === 'taptempodelay') {

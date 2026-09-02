@@ -45,7 +45,7 @@ export const compressorConfig: EffectConfig = {
   defaultValues: {
     threshold: -24,    // -24dB threshold
     ratio: 4,          // 4:1 ratio (musical compression)
-    attack: 0.2,
+    attack: 0.003,
     wet: 1.0           // 100% wet (full compression)
   },
   sliderColor: '#4169E1', // Royal blue
