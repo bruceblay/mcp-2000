@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "samples:analyze": "node scripts/normalize-default-samples.mjs --analyze-only",
+    "samples:normalize": "node scripts/normalize-default-samples.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.64",

@@ -1,0 +1,2968 @@
+{
+  "schemaVersion": 1,
+  "method": {
+    "description": "Constant-gain peak normalization with sample-peak and true-peak ceilings",
+    "targetSamplePeakDbfs": -1,
+    "targetTruePeakDbtp": -1,
+    "outputCodec": "24-bit PCM WAV",
+    "originalsModified": false
+  },
+  "summary": {
+    "sampleCount": 64,
+    "banks": {
+      "A": 16,
+      "B": 16,
+      "C": 16,
+      "D": 16
+    },
+    "minimumGainDb": -2.91,
+    "maximumGainDb": 5.83,
+    "averageGainDb": -0.9522
+  },
+  "samples": [
+    {
+      "bank": "A",
+      "padId": "pad-1",
+      "label": "Kick 01",
+      "sourcePath": "public/mock-samples/BD Short and Clean.wav",
+      "outputPath": "public/normalized-samples/A/BD Short and Clean.wav",
+      "outputUrl": "/normalized-samples/A/BD%20Short%20and%20Clean.wav",
+      "gainDb": -0.74,
+      "sourceSha256": "1bef31ae8ac8be081707d4431a3544e2e841c2c22f6cce3eaee13e544832863a",
+      "outputSha256": "ea4265435594059173aa484391f1d745caf142dc6c1090bc86dfe3fa93b18ea5",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.375011,
+        "sizeBytes": 99272
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.264682,
+        "truePeakDbtp": -0.26,
+        "rmsDbfs": -13.535442,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.375011,
+        "sizeBytes": 99296
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.004683,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -14.275442,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-2",
+      "label": "Snare 02",
+      "sourcePath": "public/mock-samples/SD Classic Snare.wav",
+      "outputPath": "public/normalized-samples/A/SD Classic Snare.wav",
+      "outputUrl": "/normalized-samples/A/SD%20Classic%20Snare.wav",
+      "gainDb": -0.9,
+      "sourceSha256": "3e5f73881db8938c620f241ec3b69af653dd6f467d09021251d49a6ac8b95d78",
+      "outputSha256": "44e6c9a08eafae7387ef488853b520a8420eaced6fc19f209f43671db52877cd",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.366395,
+        "sizeBytes": 48518
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.125256,
+        "truePeakDbtp": -0.1,
+        "rmsDbfs": -17.260248,
+        "dcOffset": 0.000038
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.366395,
+        "sizeBytes": 48542
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.025256,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.160248,
+        "dcOffset": 0.000034
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-3",
+      "label": "Hat 03",
+      "sourcePath": "public/mock-samples/HH Short.wav",
+      "outputPath": "public/normalized-samples/A/HH Short.wav",
+      "outputUrl": "/normalized-samples/A/HH%20Short.wav",
+      "gainDb": -1,
+      "sourceSha256": "aed22c9ac861355bb71173d35a8f1ccb101dbcc12c180c9740eea6c56ddc6161",
+      "outputSha256": "d02b6c7314dbf1fc7d0b106f80c5788ce3abd84b005b87b2a60ba16514725d8b",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.124989,
+        "sizeBytes": 16580
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -20.955704,
+        "dcOffset": 0.000168
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.124989,
+        "sizeBytes": 16604
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -21.955704,
+        "dcOffset": 0.00015
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-4",
+      "label": "Open Hat 04",
+      "sourcePath": "public/mock-samples/HHO Longuish.wav",
+      "outputPath": "public/normalized-samples/A/HHO Longuish.wav",
+      "outputUrl": "/normalized-samples/A/HHO%20Longuish.wav",
+      "gainDb": -1.12,
+      "sourceSha256": "dc9e2650660fc4f3121724fb787c67c8ca0d00512cee30cf0945f88e59c3897e",
+      "outputSha256": "93c86661fcbd375391f9704d8b13e31305d509d0d0d5684e36a75f21ec074938",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 1.997302,
+        "sizeBytes": 264288
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0.12,
+        "rmsDbfs": -16.271645,
+        "dcOffset": -0.000018
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 1.997302,
+        "sizeBytes": 264312
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.12,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -17.391644,
+        "dcOffset": -0.000016
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-5",
+      "label": "Clap 05",
+      "sourcePath": "public/mock-samples/CL Analog Clap.wav",
+      "outputPath": "public/normalized-samples/A/CL Analog Clap.wav",
+      "outputUrl": "/normalized-samples/A/CL%20Analog%20Clap.wav",
+      "gainDb": -0.99,
+      "sourceSha256": "39d0ecdc5c75015c45147e334b0855d0bba189bb20ebb5643ed1d5d23bc1ada9",
+      "outputSha256": "8de0dab46c35cc84e2987ca20377d4ca8321675c0ed83a3b2cac09e812a58396",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.362925,
+        "sizeBytes": 48060
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.075553,
+        "truePeakDbtp": -0.01,
+        "rmsDbfs": -21.392473,
+        "dcOffset": -0.000002
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.362925,
+        "sizeBytes": 48084
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.065554,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -22.382473,
+        "dcOffset": -0.000002
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-6",
+      "label": "Perc 06",
+      "sourcePath": "public/mock-samples/PC Cabasa.wav",
+      "outputPath": "public/normalized-samples/A/PC Cabasa.wav",
+      "outputUrl": "/normalized-samples/A/PC%20Cabasa.wav",
+      "gainDb": -1.51,
+      "sourceSha256": "5d15d4f5a55a9ef8edda904501ac01591849c5e7a6e68b129c94bc17c4bb2d51",
+      "outputSha256": "96037363cbdb6f52168f02ed3b89b42f0efbeef530ea3b44cdf5263dec6f1837",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.085374,
+        "sizeBytes": 22634
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0.51,
+        "rmsDbfs": -17.769225,
+        "dcOffset": 0.000058
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.085374,
+        "sizeBytes": 22658
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.510002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.279225,
+        "dcOffset": 0.000049
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-7",
+      "label": "Cowbell 07",
+      "sourcePath": "public/mock-samples/CB Cowbell.wav",
+      "outputPath": "public/normalized-samples/A/CB Cowbell.wav",
+      "outputUrl": "/normalized-samples/A/CB%20Cowbell.wav",
+      "gainDb": -0.53,
+      "sourceSha256": "7863723655444f38f08d4708b92a1f42ca9d0a0261f5d61418c102df2b49fa40",
+      "outputSha256": "4f28cb1f1203be8ccf007a53a5859e1be2338727ddd77470f5251d7fe32764ba",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 1.000023,
+        "sizeBytes": 132348
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.476866,
+        "truePeakDbtp": -0.47,
+        "rmsDbfs": -23.868569,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 1.000023,
+        "sizeBytes": 132372
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.006866,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -24.398569,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-8",
+      "label": "Metal FX 08",
+      "sourcePath": "public/mock-samples/FX FM Metal.wav",
+      "outputPath": "public/normalized-samples/A/FX FM Metal.wav",
+      "outputUrl": "/normalized-samples/A/FX%20FM%20Metal.wav",
+      "gainDb": -1,
+      "sourceSha256": "cec217f90b22cef1cee0cf2b163f4170f36a00ecccb31c8b297c30a310c928b7",
+      "outputSha256": "b791537bf3e466573ed138e9d256b6a2dd67da37927f21a9e515d761ef8616c0",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.4839,
+        "sizeBytes": 64064
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -16.263509,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.4839,
+        "sizeBytes": 64088
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -17.263509,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-9",
+      "label": "Tom 09",
+      "sourcePath": "public/mock-samples/TM Lo Tom.wav",
+      "outputPath": "public/normalized-samples/A/TM Lo Tom.wav",
+      "outputUrl": "/normalized-samples/A/TM%20Lo%20Tom.wav",
+      "gainDb": -0.94,
+      "sourceSha256": "dc8e48fe3dae2683773cf104b85036f29aae4dbd990b590685d1579ae41ba166",
+      "outputSha256": "f2f3ccc95730943accf167a0b5ecef4c6fa7ad9edf29cb26f6c556b58eb2e19f",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.437528,
+        "sizeBytes": 57930
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.062869,
+        "truePeakDbtp": -0.06,
+        "rmsDbfs": -10.954248,
+        "dcOffset": 0.000186
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.437528,
+        "sizeBytes": 57954
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.002869,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -11.894247,
+        "dcOffset": 0.000167
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-10",
+      "label": "Mid Tom 10",
+      "sourcePath": "public/mock-samples/TM Mid Conga Var.wav",
+      "outputPath": "public/normalized-samples/A/TM Mid Conga Var.wav",
+      "outputUrl": "/normalized-samples/A/TM%20Mid%20Conga%20Var.wav",
+      "gainDb": -0.94,
+      "sourceSha256": "45fbbdb6a826d3c4d7905fc11cc6f18af264d057d23cd0cfad7f5a01af8218e9",
+      "outputSha256": "752e2317273a70e4e30fa02322799a94d93f22a45a4a530a37685375940f2d68",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.375011,
+        "sizeBytes": 49658
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.064681,
+        "truePeakDbtp": -0.06,
+        "rmsDbfs": -13.325342,
+        "dcOffset": 0.000137
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.375011,
+        "sizeBytes": 49682
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.004681,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -14.265342,
+        "dcOffset": 0.000123
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-11",
+      "label": "Rim 11",
+      "sourcePath": "public/mock-samples/RS Classic.wav",
+      "outputPath": "public/normalized-samples/A/RS Classic.wav",
+      "outputUrl": "/normalized-samples/A/RS%20Classic.wav",
+      "gainDb": -1.02,
+      "sourceSha256": "85457372d8ec0f1dfc13fe72328befcc65bd39f1d96718f4f6f763bb3679a832",
+      "outputSha256": "d17fb36210694d7669dd67663cbc40c54a0347f1c93e161101e7ccc028627a9c",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.073741,
+        "sizeBytes": 9800
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0.02,
+        "rmsDbfs": -18.594927,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.073741,
+        "sizeBytes": 9824
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.020002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.614927,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-12",
+      "label": "Ride 12",
+      "sourcePath": "public/mock-samples/RD Ride Stereo.wav",
+      "outputPath": "public/normalized-samples/A/RD Ride Stereo.wav",
+      "outputUrl": "/normalized-samples/A/RD%20Ride%20Stereo.wav",
+      "gainDb": -0.77,
+      "sourceSha256": "780b61c1ed6d3c40920a0245c6ea537b83918bf8287fb3a58cde94c4ee0be69f",
+      "outputSha256": "2ed3e8bb268cf27142ddf17434d7fc54fc6cc944798ad1e802aa52a78379ba35",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.750023,
+        "sizeBytes": 463100
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.537218,
+        "truePeakDbtp": -0.23,
+        "rmsDbfs": -27.573774,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.750023,
+        "sizeBytes": 463124
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.307218,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -28.343774,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-13",
+      "label": "Crash 13",
+      "sourcePath": "public/mock-samples/CY Useful Mono.wav",
+      "outputPath": "public/normalized-samples/A/CY Useful Mono.wav",
+      "outputUrl": "/normalized-samples/A/CY%20Useful%20Mono.wav",
+      "gainDb": -0.39,
+      "sourceSha256": "b7b34efade5dd157d4309801232e2dd0af379c84274322bba52bb2b0ad77e913",
+      "outputSha256": "77f7768a888a129575e207eb4b05868ef6a23d8c65104adb3290f45402252c02",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.786667,
+        "sizeBytes": 104120
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -1.197777,
+        "truePeakDbtp": -0.61,
+        "rmsDbfs": -21.179414,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.786667,
+        "sizeBytes": 104144
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.587777,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -21.569414,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-14",
+      "label": "Blip 14",
+      "sourcePath": "public/mock-samples/FX Blip.wav",
+      "outputPath": "public/normalized-samples/A/FX Blip.wav",
+      "outputUrl": "/normalized-samples/A/FX%20Blip.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "ade2f19fbaa8789eca8a8ca989d2b95ba086328d966e5ed2a462fe6b23b3246c",
+      "outputSha256": "65faed627556e2470a5a31e10ddac3ad2a3886dd30b284a078fb8c52f95ef839",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.014512,
+        "sizeBytes": 1964
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.136334,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -5.197353,
+        "dcOffset": 0.012614
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 1,
+        "durationSeconds": 0.014512,
+        "sizeBytes": 1988
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.146334,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -6.207354,
+        "dcOffset": 0.011229
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-15",
+      "label": "Shaker 15",
+      "sourcePath": "public/mock-samples/PC Stereo Shaker.wav",
+      "outputPath": "public/normalized-samples/A/PC Stereo Shaker.wav",
+      "outputUrl": "/normalized-samples/A/PC%20Stereo%20Shaker.wav",
+      "gainDb": -1.25,
+      "sourceSha256": "5727fd69486cba1284104539ad53a0f4854c4104240438ce915520f08b516fa6",
+      "outputSha256": "23651e87b7f6ac834084515c358ec04472119e53bb5036e1489df26f77fa559f",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.289592,
+        "sizeBytes": 76670
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.25,
+        "rmsDbfs": -24.464657,
+        "dcOffset": -0.000002
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.289592,
+        "sizeBytes": 76694
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.249999,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -25.714657,
+        "dcOffset": -0.000002
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "A",
+      "padId": "pad-16",
+      "label": "Ride FX 16",
+      "sourcePath": "public/mock-samples/FX Chorus Ride.wav",
+      "outputPath": "public/normalized-samples/A/FX Chorus Ride.wav",
+      "outputUrl": "/normalized-samples/A/FX%20Chorus%20Ride.wav",
+      "gainDb": 3.39,
+      "sourceSha256": "a559eb2b3f0293e15686a90abda61d14124af88fbce443977ec43a45a59faac9",
+      "outputSha256": "b73d44dc5f4fa9ba22d2d7cf147df94c57d0733f094051f4983f4ee355971721",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.750023,
+        "sizeBytes": 463100
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -5.749233,
+        "truePeakDbtp": -4.39,
+        "rmsDbfs": -31.214214,
+        "dcOffset": 0.000006
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.750023,
+        "sizeBytes": 463124
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -2.359232,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -27.824214,
+        "dcOffset": 0.000009
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-1",
+      "label": "Boing 01",
+      "sourcePath": "public/kraftwerk-kit/boing.wav",
+      "outputPath": "public/normalized-samples/B/boing.wav",
+      "outputUrl": "/normalized-samples/B/boing.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "7b16b748b0ddfbe65ce4a1836057ff1fb740f4dacaa4cb9ead2e6989daee4556",
+      "outputSha256": "a97047571b81d6101777ce8253082a78718e8e3e41fc0570a6f73cc8be268497",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.75,
+        "sizeBytes": 216080
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -15.220857,
+        "dcOffset": -0.001238
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.75,
+        "sizeBytes": 216068
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.010001,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -16.230857,
+        "dcOffset": -0.001102
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-2",
+      "label": "Ping 02",
+      "sourcePath": "public/kraftwerk-kit/ping.wav",
+      "outputPath": "public/normalized-samples/B/ping.wav",
+      "outputUrl": "/normalized-samples/B/ping.wav",
+      "gainDb": -1,
+      "sourceSha256": "f4a1bc6972da33b2382f6e0315d0d05f44bf7b31f4f4e5c8873a2d474c862f4d",
+      "outputSha256": "28cbe8216d2165282605a49e67ce69229186053f505acc13eb002a87c9b0e8a2",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.532229,
+        "sizeBytes": 153362
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -18.796839,
+        "dcOffset": -0.009526
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.532229,
+        "sizeBytes": 153350
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.796839,
+        "dcOffset": -0.00849
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-3",
+      "label": "Boom 03",
+      "sourcePath": "public/kraftwerk-kit/boom.wav",
+      "outputPath": "public/normalized-samples/B/boom.wav",
+      "outputUrl": "/normalized-samples/B/boom.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "2a32386e411533e23b12daf747a19c59e990a6f1f919a01f0b564073a1e8bacb",
+      "outputSha256": "9e9739252becc3494a16c50ad655830b3d7aa276c4e15267e6dce9a7a4934f54",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.265625,
+        "sizeBytes": 76580
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -10.637062,
+        "dcOffset": -0.000147
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.265625,
+        "sizeBytes": 76568
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.010001,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -11.647062,
+        "dcOffset": -0.000131
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-4",
+      "label": "Tscha 04",
+      "sourcePath": "public/kraftwerk-kit/tscha.wav",
+      "outputPath": "public/normalized-samples/B/tscha.wav",
+      "outputUrl": "/normalized-samples/B/tscha.wav",
+      "gainDb": -1.02,
+      "sourceSha256": "9dec3dc8a72fe8c1ab2c1d1c825b780c22bb2e9ff727fa91bf3335cef32adfb1",
+      "outputSha256": "61e4faa2fb71a820be7b57283eb2489b92c00ca78776b2a5334a06cd0f48ca33",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.15625,
+        "sizeBytes": 45080
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0.02,
+        "rmsDbfs": -14.235535,
+        "dcOffset": -0.003805
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.15625,
+        "sizeBytes": 45068
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.020002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -15.255535,
+        "dcOffset": -0.003383
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-5",
+      "label": "Musique 05",
+      "sourcePath": "public/kraftwerk-kit/musique.wav",
+      "outputPath": "public/normalized-samples/B/musique.wav",
+      "outputUrl": "/normalized-samples/B/musique.wav",
+      "gainDb": -1.06,
+      "sourceSha256": "ca5ec9a04bd62566c85e19c6f83208d13e4cf0fdc9f904fe39691d28bc1b9e93",
+      "outputSha256": "d677df654632fc583e47026dd79332a0e98ce2e1892e4c8a23c99ab979709433",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.584271,
+        "sizeBytes": 168350
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.06,
+        "rmsDbfs": -16.486575,
+        "dcOffset": -0.006226
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.584271,
+        "sizeBytes": 168338
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.06,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -17.546575,
+        "dcOffset": -0.005511
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-6",
+      "label": "Non-Stop 06",
+      "sourcePath": "public/kraftwerk-kit/non-stop.wav",
+      "outputPath": "public/normalized-samples/B/non-stop.wav",
+      "outputUrl": "/normalized-samples/B/non-stop.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "5062bbdf30a77d15f6ed6f2be02c6579085619fd8efd2fa50ef1254751d9d5e8",
+      "outputSha256": "6f5ed34163db6244cad3a21472dd622c41756e99b4bcdc3db42318506c7c2251",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.566271,
+        "sizeBytes": 163166
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -13.549482,
+        "dcOffset": -0.008307
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.566271,
+        "sizeBytes": 163154
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.01,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -14.559482,
+        "dcOffset": -0.007395
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-7",
+      "label": "Techno 07",
+      "sourcePath": "public/kraftwerk-kit/techno.wav",
+      "outputPath": "public/normalized-samples/B/techno.wav",
+      "outputUrl": "/normalized-samples/B/techno.wav",
+      "gainDb": -1.03,
+      "sourceSha256": "1547953247b21276a5c9431cd79d5e5dfedb3e38f5f6704841ae878321874c16",
+      "outputSha256": "4c56bb0328b30a2c43008e6e2d868dd018d1b72e86f5464d29eb88c3ba706eb6",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.838062,
+        "sizeBytes": 241442
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.03,
+        "rmsDbfs": -17.085259,
+        "dcOffset": -0.005772
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.838062,
+        "sizeBytes": 241430
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.03,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.115259,
+        "dcOffset": -0.005127
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-8",
+      "label": "Pop 08",
+      "sourcePath": "public/kraftwerk-kit/pop.wav",
+      "outputPath": "public/normalized-samples/B/pop.wav",
+      "outputUrl": "/normalized-samples/B/pop.wav",
+      "gainDb": -1,
+      "sourceSha256": "70ec38a2f0d5160afea1195297608045392104ce504fc92333e7018fd876852e",
+      "outputSha256": "1d8b77bb69b4ccc715cf7d6eeef312beaf1a9b16a8523dde0eff365e60f7605a",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.570688,
+        "sizeBytes": 164438
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -15.772282,
+        "dcOffset": -0.008198
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.570688,
+        "sizeBytes": 164426
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -16.772282,
+        "dcOffset": -0.007307
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-9",
+      "label": "Bass Drum 09",
+      "sourcePath": "public/kraftwerk-kit/bass-drum.wav",
+      "outputPath": "public/normalized-samples/B/bass-drum.wav",
+      "outputUrl": "/normalized-samples/B/bass-drum.wav",
+      "gainDb": -1,
+      "sourceSha256": "845d11288c9d82c6079729fd80d9ee68abdfce51f16209414ff1c870ee83a9e0",
+      "outputSha256": "a74c9bb74ec2a124a0ea0ea4b0d6097e45f34113fbabe23e4205a538e6977956",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.386813,
+        "sizeBytes": 111482
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -15.679694,
+        "dcOffset": -0.000483
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.386813,
+        "sizeBytes": 111470
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -16.679694,
+        "dcOffset": -0.00043
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-10",
+      "label": "Snare 10",
+      "sourcePath": "public/kraftwerk-kit/snare.wav",
+      "outputPath": "public/normalized-samples/B/snare.wav",
+      "outputUrl": "/normalized-samples/B/snare.wav",
+      "gainDb": -1,
+      "sourceSha256": "19efeb23bfb40bc51cd97f293d706b1b499b340aeb75770bfc0bb5e88b7e5c10",
+      "outputSha256": "a846bc27d8826d13efa0396856216309b74a9ca1713c02c6a70ede388ffb5691",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.548083,
+        "sizeBytes": 157928
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -14.924694,
+        "dcOffset": -0.004934
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.548083,
+        "sizeBytes": 157916
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000001,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -15.924694,
+        "dcOffset": -0.004398
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-11",
+      "label": "Bell 11",
+      "sourcePath": "public/kraftwerk-kit/bell.wav",
+      "outputPath": "public/normalized-samples/B/bell.wav",
+      "outputUrl": "/normalized-samples/B/bell.wav",
+      "gainDb": 5.83,
+      "sourceSha256": "95b7ce3a1fe3c09dcec16b723f25ea39196eb06b4281c4b9910c206e95a1911e",
+      "outputSha256": "b09b0fed4d1a294e1208c6d6fdceed7925f4b15a3ca5caa641746eb8c4e681bf",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.142125,
+        "sizeBytes": 41012
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -6.887333,
+        "truePeakDbtp": -6.83,
+        "rmsDbfs": -20.481658,
+        "dcOffset": -0.003623
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.142125,
+        "sizeBytes": 41000
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.057333,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -14.651658,
+        "dcOffset": -0.007088
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-12",
+      "label": "Lasers 12",
+      "sourcePath": "public/kraftwerk-kit/lasers.wav",
+      "outputPath": "public/normalized-samples/B/lasers.wav",
+      "outputUrl": "/normalized-samples/B/lasers.wav",
+      "gainDb": -1,
+      "sourceSha256": "808f0da3018b9bfc7e4312bec8da8ca3af3657902ae9b5d33439a4b445cc2d67",
+      "outputSha256": "c25f8f5ba455390ecccf1638f8dacc67d7288c7114fc1e1b1aa2fa0f98eef6f5",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.887062,
+        "sizeBytes": 255554
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -17.418155,
+        "dcOffset": -0.00885
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.887062,
+        "sizeBytes": 255542
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.418155,
+        "dcOffset": -0.007888
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-13",
+      "label": "Melody 13",
+      "sourcePath": "public/kraftwerk-kit/melody.wav",
+      "outputPath": "public/normalized-samples/B/melody.wav",
+      "outputUrl": "/normalized-samples/B/melody.wav",
+      "gainDb": -1.06,
+      "sourceSha256": "e2abfcd75cbfa01896355a1d56bab2f10d30e936fd039a95c04289f216c2ed16",
+      "outputSha256": "70eac7e0f750ff138ede54049914374eed13a15c870d3d5e9ada9e64d170684b",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 1.937833,
+        "sizeBytes": 558176
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.06,
+        "rmsDbfs": -18.612374,
+        "dcOffset": -0.00646
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 1.937833,
+        "sizeBytes": 558164
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.06,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.672374,
+        "dcOffset": -0.005718
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-14",
+      "label": "Synth 14",
+      "sourcePath": "public/kraftwerk-kit/synth.wav",
+      "outputPath": "public/normalized-samples/B/synth.wav",
+      "outputUrl": "/normalized-samples/B/synth.wav",
+      "gainDb": -1.06,
+      "sourceSha256": "a7a2820c97dbfa396827e18ff9a100e3677d226f958f9d9a922b1a7c6fc38567",
+      "outputSha256": "d501c7f99aff9abf3275e879d02c99c9cb3dbbcd74fbc22ab9451c714a8ab044",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.142125,
+        "sizeBytes": 41012
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.06,
+        "rmsDbfs": -13.594325,
+        "dcOffset": -0.008005
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.142125,
+        "sizeBytes": 41000
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.06,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -14.654325,
+        "dcOffset": -0.007086
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-15",
+      "label": "Low Boing 15",
+      "sourcePath": "public/kraftwerk-kit/low-boing.wav",
+      "outputPath": "public/normalized-samples/B/low-boing.wav",
+      "outputUrl": "/normalized-samples/B/low-boing.wav",
+      "gainDb": -1,
+      "sourceSha256": "305ad0d41dd622fb10a60cb289da3e95a31e1ea9e85a33f4adef5a53e82e49e3",
+      "outputSha256": "edfe30b5989c3396761605e654f884bdc81103e887990c2bc363db7b4a41ab3a",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.821333,
+        "sizeBytes": 236624
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -15.918728,
+        "dcOffset": -0.005269
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.821333,
+        "sizeBytes": 236612
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -16.918728,
+        "dcOffset": -0.004696
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "B",
+      "padId": "pad-16",
+      "label": "Ahh 16",
+      "sourcePath": "public/kraftwerk-kit/ahh.wav",
+      "outputPath": "public/normalized-samples/B/ahh.wav",
+      "outputUrl": "/normalized-samples/B/ahh.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "69f86958e326ac8c7d26c6d432f94e3b922c569a5cc74f571109c98868b2a3fa",
+      "outputSha256": "1910f53a01099647388fd4e74681b200d197a50044bf87458bda64a125f4379f",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.516646,
+        "sizeBytes": 148874
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -15.235064,
+        "dcOffset": -0.005297
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.516646,
+        "sizeBytes": 148862
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.01,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -16.245065,
+        "dcOffset": -0.004716
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-1",
+      "label": "Stomp 01",
+      "sourcePath": "public/ice-kit/1774400746585-pad-1-blade-stomp-thud.mp3",
+      "outputPath": "public/normalized-samples/C/1774400746585-pad-1-blade-stomp-thud.wav",
+      "outputUrl": "/normalized-samples/C/1774400746585-pad-1-blade-stomp-thud.wav",
+      "gainDb": -1.71,
+      "sourceSha256": "02dd35dd5deeaddb16ead00207157a528548866c1784afb270bea032e3ae1119",
+      "outputSha256": "37d931bcda74af6efd47e525d62262bb098f37a8d074633885dcc537ef18179b",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.2,
+        "sizeBytes": 20106
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0.685273,
+        "truePeakDbtp": 0.71,
+        "rmsDbfs": -14.887853,
+        "dcOffset": -0.00045
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.2,
+        "sizeBytes": 317588
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.024727,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -16.597853,
+        "dcOffset": -0.00037
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-2",
+      "label": "Crack 02",
+      "sourcePath": "public/ice-kit/1774400746540-pad-2-ice-crack-snap.mp3",
+      "outputPath": "public/normalized-samples/C/1774400746540-pad-2-ice-crack-snap.wav",
+      "outputUrl": "/normalized-samples/C/1774400746540-pad-2-ice-crack-snap.wav",
+      "gainDb": -1.63,
+      "sourceSha256": "4aa89697a04c3c3f82f714c1bf6ac3d23077f688d8f4a4e04d0b4945c93eaf9e",
+      "outputSha256": "b370d6d7dd4ecc2b4c9b0b0692283596df251196ce15760956b75ab704626190",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.8,
+        "sizeBytes": 13836
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0.616752,
+        "truePeakDbtp": 0.63,
+        "rmsDbfs": -17.313957,
+        "dcOffset": -0.00067
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.8,
+        "sizeBytes": 211748
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.013248,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.943957,
+        "dcOffset": -0.000555
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-3",
+      "label": "Scrape 03",
+      "sourcePath": "public/ice-kit/1774400746466-pad-3-quick-blade-scrape.mp3",
+      "outputPath": "public/normalized-samples/C/1774400746466-pad-3-quick-blade-scrape.wav",
+      "outputUrl": "/normalized-samples/C/1774400746466-pad-3-quick-blade-scrape.wav",
+      "gainDb": -1.93,
+      "sourceSha256": "96321403bd0143518e6b5b32b43601ef361fcaa40a7e801e608f2a15d634f344",
+      "outputSha256": "9a74c3f3599c9414b1a8dee03c6ebca4c81c369bac728d1040aeae6d4468b000",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.48,
+        "sizeBytes": 8821
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0.904203,
+        "truePeakDbtp": 0.93,
+        "rmsDbfs": -17.328488,
+        "dcOffset": -0.000415
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.48,
+        "sizeBytes": 127076
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.025797,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.258488,
+        "dcOffset": -0.000332
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-4",
+      "label": "Glide 04",
+      "sourcePath": "public/ice-kit/1774400746919-pad-4-gliding-edge-release.mp3",
+      "outputPath": "public/normalized-samples/C/1774400746919-pad-4-gliding-edge-release.wav",
+      "outputUrl": "/normalized-samples/C/1774400746919-pad-4-gliding-edge-release.wav",
+      "gainDb": -2.53,
+      "sourceSha256": "db215bace9204bed2c66674c9f7cccd2a1e8bb14d6e3cfee420c86a335ab16a3",
+      "outputSha256": "50ca54a13df5c5a0847190722d7829b79d2ce531881e8dfe290505092c372328",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.48,
+        "sizeBytes": 24703
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 1.524787,
+        "truePeakDbtp": 1.53,
+        "rmsDbfs": -19.816705,
+        "dcOffset": -0.000224
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.48,
+        "sizeBytes": 391676
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.005213,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -22.346705,
+        "dcOffset": -0.000167
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-5",
+      "label": "Chop 05",
+      "sourcePath": "public/ice-kit/1774400748514-pad-5-double-blade-chop.mp3",
+      "outputPath": "public/normalized-samples/C/1774400748514-pad-5-double-blade-chop.wav",
+      "outputUrl": "/normalized-samples/C/1774400748514-pad-5-double-blade-chop.wav",
+      "gainDb": -1.7906,
+      "sourceSha256": "7bc7f9bc1a7e5ca8912daa58b858be09ec5ff606dc7fecadb5154001fbb7c1af",
+      "outputSha256": "e1a9cf67447d65da7a678a5898bee185b3e623876458305d478cf4b1dfb0ce2e",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.88,
+        "sizeBytes": 15090
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0.790558,
+        "truePeakDbtp": 0.79,
+        "rmsDbfs": -19.079825,
+        "dcOffset": -0.000493
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.88,
+        "sizeBytes": 232916
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -20.870384,
+        "dcOffset": -0.000401
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-6",
+      "label": "Tap 06",
+      "sourcePath": "public/ice-kit/1774400749279-pad-6-frozen-surface-tap.mp3",
+      "outputPath": "public/normalized-samples/C/1774400749279-pad-6-frozen-surface-tap.wav",
+      "outputUrl": "/normalized-samples/C/1774400749279-pad-6-frozen-surface-tap.wav",
+      "gainDb": -0.58,
+      "sourceSha256": "296141f79de0ea25ed931ec4726a38e20cb31f1cf83fea7d97997e7ec49a63b1",
+      "outputSha256": "4c44180da4254c48c6f8120297d3da6a1da32f6ff81a1c3e92282864005bb327",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.680249,
+        "sizeBytes": 12164
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.487577,
+        "truePeakDbtp": -0.42,
+        "rmsDbfs": -27.075901,
+        "dcOffset": -0.000066
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.680249,
+        "sizeBytes": 180062
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.067577,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -27.655901,
+        "dcOffset": -0.000062
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-7",
+      "label": "Clank 07",
+      "sourcePath": "public/ice-kit/1774400748824-pad-7-blade-guard-clank.mp3",
+      "outputPath": "public/normalized-samples/C/1774400748824-pad-7-blade-guard-clank.wav",
+      "outputUrl": "/normalized-samples/C/1774400748824-pad-7-blade-guard-clank.wav",
+      "gainDb": -2.24,
+      "sourceSha256": "aeaf8dd7317b13da9e45f3e4a44de2aacd51ef338a8fe21766e445b99b96203c",
+      "outputSha256": "839946ed4a1ee7f3f2efe279452bf29f1aaeea6a9342018e784e9a605fb5b0ab",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1,
+        "sizeBytes": 17180
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 1.17466,
+        "truePeakDbtp": 1.24,
+        "rmsDbfs": -16.677248,
+        "dcOffset": -0.000939
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1,
+        "sizeBytes": 264668
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.065339,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.917248,
+        "dcOffset": -0.000726
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-8",
+      "label": "Whoosh 08",
+      "sourcePath": "public/ice-kit/1774400748728-pad-8-spinning-blade-whoosh.mp3",
+      "outputPath": "public/normalized-samples/C/1774400748728-pad-8-spinning-blade-whoosh.wav",
+      "outputUrl": "/normalized-samples/C/1774400748728-pad-8-spinning-blade-whoosh.wav",
+      "gainDb": -2.91,
+      "sourceSha256": "05a4e14914ccfd04b867f4f0eb06c3216d6bd0b9fabcf59011e7dd6c4abb4720",
+      "outputSha256": "155c5e064560603ae173145db77633d8cad9e7f67578034d036ad8a2cceb2b26",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 2,
+        "sizeBytes": 33062
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 1.784023,
+        "truePeakDbtp": 1.91,
+        "rmsDbfs": -15.119979,
+        "dcOffset": -0.001003
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 2,
+        "sizeBytes": 529268
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.125977,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.029979,
+        "dcOffset": -0.000718
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-9",
+      "label": "Resonance 09",
+      "sourcePath": "public/ice-kit/1774400751178-pad-9-low-ice-resonance.mp3",
+      "outputPath": "public/normalized-samples/C/1774400751178-pad-9-low-ice-resonance.wav",
+      "outputUrl": "/normalized-samples/C/1774400751178-pad-9-low-ice-resonance.wav",
+      "gainDb": -0.75,
+      "sourceSha256": "f96ad4693717e764aa7c29b0948a51fd704d8392f6ddb0d8ffdafec81b1e9eec",
+      "outputSha256": "80ccff260cad70e459d35344df19edf8d6850cf83648adfc048ea18f19b884bf",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 2.48,
+        "sizeBytes": 40586
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.273806,
+        "truePeakDbtp": -0.25,
+        "rmsDbfs": -16.634688,
+        "dcOffset": -0.000864
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 2.48,
+        "sizeBytes": 656276
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.023807,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -17.384689,
+        "dcOffset": -0.000792
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-10",
+      "label": "Frost 10",
+      "sourcePath": "public/ice-kit/1774400750926-pad-10-mid-frost-knock.mp3",
+      "outputPath": "public/normalized-samples/C/1774400750926-pad-10-mid-frost-knock.wav",
+      "outputUrl": "/normalized-samples/C/1774400750926-pad-10-mid-frost-knock.wav",
+      "gainDb": -1.38,
+      "sourceSha256": "918009307cac869e3845d5d9004e2d1f23df9d9c40abcf566f2acffcf8bbaae5",
+      "outputSha256": "688b21e9e0d0932e1fe0c678e33a704b38579b3b3040f434ae1fa51e186cd1c7",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 2,
+        "sizeBytes": 33062
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0.345534,
+        "truePeakDbtp": 0.38,
+        "rmsDbfs": -21.550364,
+        "dcOffset": -0.000203
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 2,
+        "sizeBytes": 529268
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.034466,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -22.930364,
+        "dcOffset": -0.000173
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-11",
+      "label": "Tick 11",
+      "sourcePath": "public/ice-kit/1774400751124-pad-11-edge-tick-melody.mp3",
+      "outputPath": "public/normalized-samples/C/1774400751124-pad-11-edge-tick-melody.wav",
+      "outputUrl": "/normalized-samples/C/1774400751124-pad-11-edge-tick-melody.wav",
+      "gainDb": -2.83,
+      "sourceSha256": "f506ad321d3b15451af80de689be9693327df3ac8237d42b4e9b1101421c0f92",
+      "outputSha256": "ef0d447ce0606f47709b2e57bc44d7abfd9cfd078486d2326f91832d3e3def73",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.76,
+        "sizeBytes": 29301
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 1.759586,
+        "truePeakDbtp": 1.83,
+        "rmsDbfs": -18.389865,
+        "dcOffset": -0.000337
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.76,
+        "sizeBytes": 465764
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.070414,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -21.219865,
+        "dcOffset": -0.000243
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-12",
+      "label": "Shimmer 12",
+      "sourcePath": "public/ice-kit/1774400751187-pad-12-sustained-glide-shimmer.mp3",
+      "outputPath": "public/normalized-samples/C/1774400751187-pad-12-sustained-glide-shimmer.wav",
+      "outputUrl": "/normalized-samples/C/1774400751187-pad-12-sustained-glide-shimmer.wav",
+      "gainDb": -0.15,
+      "sourceSha256": "18166cebdf00d05c2a494a323f709b30ab4c04313e61b4106a837714a1faae52",
+      "outputSha256": "60a1a945fb5f599ba51c6f0fad6d5a1c6adb4561e3cca50beb57f447d40cc6a6",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 3.48,
+        "sizeBytes": 56886
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -1.046596,
+        "truePeakDbtp": -0.85,
+        "rmsDbfs": -23.659204,
+        "dcOffset": -0.000035
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 3.48,
+        "sizeBytes": 920876
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.196596,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -23.809204,
+        "dcOffset": -0.000034
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-13",
+      "label": "Shatter 13",
+      "sourcePath": "public/ice-kit/1774400754905-pad-13-ice-shatter-burst.mp3",
+      "outputPath": "public/normalized-samples/C/1774400754905-pad-13-ice-shatter-burst.wav",
+      "outputUrl": "/normalized-samples/C/1774400754905-pad-13-ice-shatter-burst.wav",
+      "gainDb": -1.97,
+      "sourceSha256": "248c194d5c3a43f68fa0512a8a4633e40de3b9713f8c91d41b21947642414a73",
+      "outputSha256": "42196ab899a4bef83d27e890a4b824bc49951946c84402e807c98327578549e4",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 4,
+        "sizeBytes": 65245
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0.91505,
+        "truePeakDbtp": 0.97,
+        "rmsDbfs": -17.944186,
+        "dcOffset": -0.000411
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 4,
+        "sizeBytes": 1058468
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.054951,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.914186,
+        "dcOffset": -0.000327
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-14",
+      "label": "Chirp 14",
+      "sourcePath": "public/ice-kit/1774400752826-pad-14-blade-squeak-chirp.mp3",
+      "outputPath": "public/normalized-samples/C/1774400752826-pad-14-blade-squeak-chirp.wav",
+      "outputUrl": "/normalized-samples/C/1774400752826-pad-14-blade-squeak-chirp.wav",
+      "gainDb": 0.28,
+      "sourceSha256": "e703f9583445e8ff292a96ae5499ffa4f90d46016ccff2adc4e01c0294483724",
+      "outputSha256": "bac1a47dd633c6e9ef34cfa302b1f8570d833c98a61ad228324bddbcff1ccc11",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.6,
+        "sizeBytes": 10493
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -1.33889,
+        "truePeakDbtp": -1.28,
+        "rmsDbfs": -14.938693,
+        "dcOffset": -0.000487
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 0.6,
+        "sizeBytes": 158828
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.058889,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -14.658693,
+        "dcOffset": -0.000503
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-15",
+      "label": "Scatter 15",
+      "sourcePath": "public/ice-kit/1774400752914-pad-15-ice-chip-scatter.mp3",
+      "outputPath": "public/normalized-samples/C/1774400752914-pad-15-ice-chip-scatter.wav",
+      "outputUrl": "/normalized-samples/C/1774400752914-pad-15-ice-chip-scatter.wav",
+      "gainDb": -1.16,
+      "sourceSha256": "29eec1fa94a2c5cf599f9c5d397d0b6641b5450d046da409b587292438a5dc89",
+      "outputSha256": "3be5941b51c89ffe9b5e810c8d864e23b1016c0d0e2f452f04c6b696fc681112",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.48,
+        "sizeBytes": 24703
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.003312,
+        "truePeakDbtp": 0.16,
+        "rmsDbfs": -22.478571,
+        "dcOffset": -0.000074
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 1.48,
+        "sizeBytes": 391676
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.163312,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -23.638571,
+        "dcOffset": -0.000065
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "C",
+      "padId": "pad-16",
+      "label": "Wind 16",
+      "sourcePath": "public/ice-kit/1774400753041-pad-16-arctic-wind-carve.mp3",
+      "outputPath": "public/normalized-samples/C/1774400753041-pad-16-arctic-wind-carve.wav",
+      "outputUrl": "/normalized-samples/C/1774400753041-pad-16-arctic-wind-carve.wav",
+      "gainDb": -1.453,
+      "sourceSha256": "11609c4e30045e158b46624e66a1082c3666d76c195ffa1d3d060ad5d49e0bd2",
+      "outputSha256": "61940b7a91ee4b3b2a75e9652936ff8745b9303a497a04ad2863236f7ac4f6ca",
+      "source": {
+        "codec": "mp3",
+        "sampleFormat": "fltp",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 3.76,
+        "sizeBytes": 61066
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0.45296,
+        "truePeakDbtp": 0.44,
+        "rmsDbfs": -18.198145,
+        "dcOffset": -0.000061
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 44100,
+        "channels": 2,
+        "durationSeconds": 3.76,
+        "sizeBytes": 994964
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000001,
+        "truePeakDbtp": -1.01,
+        "rmsDbfs": -19.651105,
+        "dcOffset": -0.000052
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-1",
+      "label": "Guitar 01",
+      "sourcePath": "public/acoustic-guitar/first.wav",
+      "outputPath": "public/normalized-samples/D/first.wav",
+      "outputUrl": "/normalized-samples/D/first.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "512ae0e110dc6239be0bda45861c990f5c6d309432260cdd2e7f4555f77a46a0",
+      "outputSha256": "3309050646db1e3e2877e175b87185852201040a2655910e21d86ae1f4019294",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.433437,
+        "sizeBytes": 988910
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -17.074578,
+        "dcOffset": -0.000006
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.433437,
+        "sizeBytes": 988898
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.01,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.084578,
+        "dcOffset": -0.000005
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-2",
+      "label": "Guitar 02",
+      "sourcePath": "public/acoustic-guitar/second.wav",
+      "outputPath": "public/normalized-samples/D/second.wav",
+      "outputUrl": "/normalized-samples/D/second.wav",
+      "gainDb": -1,
+      "sourceSha256": "7bc7e3700375050bdd42a0701f7f970ee3cffc8ef3a67d2c384e30b9f729a5b6",
+      "outputSha256": "03783d865b2d88c71064cef358944c79a855df49666ac6c40e8a7c3f3ba1ebd6",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 5.515292,
+        "sizeBytes": 1588484
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -21.248553,
+        "dcOffset": 0.000002
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 5.515292,
+        "sizeBytes": 1588472
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -22.248553,
+        "dcOffset": 0.000002
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-3",
+      "label": "Guitar 03",
+      "sourcePath": "public/acoustic-guitar/third.wav",
+      "outputPath": "public/normalized-samples/D/third.wav",
+      "outputUrl": "/normalized-samples/D/third.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "100c54b587932dbb5d587e98732d7509ed75e395b538be08e23930305a4034c7",
+      "outputSha256": "0971c770e67cd2b0d3b0e02dae27adf019d05fefffa931f37815382330490bd5",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 5.033875,
+        "sizeBytes": 1449836
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -18.934791,
+        "dcOffset": -0.000001
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 5.033875,
+        "sizeBytes": 1449824
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.01,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.944791,
+        "dcOffset": -0.000001
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-4",
+      "label": "Guitar 04",
+      "sourcePath": "public/acoustic-guitar/fourth.wav",
+      "outputPath": "public/normalized-samples/D/fourth.wav",
+      "outputUrl": "/normalized-samples/D/fourth.wav",
+      "gainDb": -1,
+      "sourceSha256": "9d716fe66b25d58b2926455591f517f3a7a39e45891f02443755cd3b32504c09",
+      "outputSha256": "e2f38d625033eb4f7cb97def139448aa30e8a9b2ec35b7f952445e247d422e83",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.850187,
+        "sizeBytes": 1396934
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -19.044757,
+        "dcOffset": 0.000001
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.850187,
+        "sizeBytes": 1396922
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -20.044757,
+        "dcOffset": 0.000001
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-5",
+      "label": "Guitar 05",
+      "sourcePath": "public/acoustic-guitar/fifth.wav",
+      "outputPath": "public/normalized-samples/D/fifth.wav",
+      "outputUrl": "/normalized-samples/D/fifth.wav",
+      "gainDb": -1,
+      "sourceSha256": "66f6d9eb7101bf14110bd07b8dbd36f8e31efa47fba7a8a44ee835a80baf7c25",
+      "outputSha256": "88d41cd8bb31a024d1004b80ea20f0b7fedb697bb52269adff8658c06982de61",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.811333,
+        "sizeBytes": 1385744
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -16.151784,
+        "dcOffset": 0.000013
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.811333,
+        "sizeBytes": 1385732
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -17.151785,
+        "dcOffset": 0.000012
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-6",
+      "label": "Guitar 06",
+      "sourcePath": "public/acoustic-guitar/sixth.wav",
+      "outputPath": "public/normalized-samples/D/sixth.wav",
+      "outputUrl": "/normalized-samples/D/sixth.wav",
+      "gainDb": -1,
+      "sourceSha256": "e2e99515d6c2786c62970b116625ed8c74bcadb791d1f8e757b5536260e02b7f",
+      "outputSha256": "5a46935f890008461e8a3804a90b5b5f81faedceedf961369ea780169987982e",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.657583,
+        "sizeBytes": 1341464
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -18.248275,
+        "dcOffset": 0.000007
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.657583,
+        "sizeBytes": 1341452
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -19.248275,
+        "dcOffset": 0.000006
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-7",
+      "label": "Guitar 07",
+      "sourcePath": "public/acoustic-guitar/seventh.wav",
+      "outputPath": "public/normalized-samples/D/seventh.wav",
+      "outputUrl": "/normalized-samples/D/seventh.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "2da16fa18f5baf7f20c34c1b68e4ec3e278b923b9e5b937c9fdf283e83da8d55",
+      "outputSha256": "a1d85b75b56e329b400eb7b6bc38431fd165c129b9498f33953fc1fae3aca37b",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 2.694854,
+        "sizeBytes": 776198
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -21.421015,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 2.694854,
+        "sizeBytes": 776186
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.010001,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -22.431016,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-8",
+      "label": "Guitar 08",
+      "sourcePath": "public/acoustic-guitar/eigth.wav",
+      "outputPath": "public/normalized-samples/D/eigth.wav",
+      "outputUrl": "/normalized-samples/D/eigth.wav",
+      "gainDb": -1,
+      "sourceSha256": "aaf26a171a27289e7f0976cd7f0763764f7246cad01b97a7a34620f3287f1ae1",
+      "outputSha256": "e587e9f290a603f972fb321e127a1339e537fd6837c552998ae1f0df97a0beed",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 2.625,
+        "sizeBytes": 756080
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -21.473207,
+        "dcOffset": -0.000001
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 2.625,
+        "sizeBytes": 756068
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -22.473207,
+        "dcOffset": -0.000001
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-9",
+      "label": "Guitar 09",
+      "sourcePath": "public/acoustic-guitar/nineth.wav",
+      "outputPath": "public/normalized-samples/D/nineth.wav",
+      "outputUrl": "/normalized-samples/D/nineth.wav",
+      "gainDb": -1,
+      "sourceSha256": "df18734b48ebede4e08965ee3c6bfe6934a7b21ca7c17086d35ba11033063ebc",
+      "outputSha256": "5aa34fe9ae814e74a740249bd90dc415dc4025329cb9ccece541bcf6153dc362",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.763417,
+        "sizeBytes": 1083944
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -21.519082,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.763417,
+        "sizeBytes": 1083932
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -22.519083,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-10",
+      "label": "Guitar 10",
+      "sourcePath": "public/acoustic-guitar/tenth.wav",
+      "outputPath": "public/normalized-samples/D/tenth.wav",
+      "outputUrl": "/normalized-samples/D/tenth.wav",
+      "gainDb": -1,
+      "sourceSha256": "0295a0a3b5a1fd91c718637a65b28d03ebdb969a4a9c66fc1dd0b6a387ed00c6",
+      "outputSha256": "8833e31cc2b8c67df160a025597841f81c3a6fbc89424752562c97f3eadb6886",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.5625,
+        "sizeBytes": 1314080
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -16.361272,
+        "dcOffset": -0.000003
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.5625,
+        "sizeBytes": 1314068
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -17.361273,
+        "dcOffset": -0.000003
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-11",
+      "label": "Guitar 11",
+      "sourcePath": "public/acoustic-guitar/eleventh.wav",
+      "outputPath": "public/normalized-samples/D/eleventh.wav",
+      "outputUrl": "/normalized-samples/D/eleventh.wav",
+      "gainDb": -1,
+      "sourceSha256": "104423bd9c0477fc00deabd7846ecbf5ec7da6a1bc090126e4f58090a1f99398",
+      "outputSha256": "33167d40baa3a19152e1d7e849120308dbee81e63e6e0000471766ed6fd1fafd",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.385375,
+        "sizeBytes": 975068
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -15.100982,
+        "dcOffset": 0.000002
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.385375,
+        "sizeBytes": 975056
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -16.100982,
+        "dcOffset": 0.000002
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-12",
+      "label": "Guitar 12",
+      "sourcePath": "public/acoustic-guitar/twelth.wav",
+      "outputPath": "public/normalized-samples/D/twelth.wav",
+      "outputUrl": "/normalized-samples/D/twelth.wav",
+      "gainDb": -1,
+      "sourceSha256": "28bf44b77e17dc482ce4d0d8961ea6e69b40bdd3cb6bf44ca1095e25e7d130ce",
+      "outputSha256": "0f3e2c64c93c2d0f2820e8c925d0f7b4fe750fb9257e5f498e4be18b41c71f57",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.383667,
+        "sizeBytes": 1262576
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -17.449425,
+        "dcOffset": -0.000001
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 4.383667,
+        "sizeBytes": 1262564
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.449425,
+        "dcOffset": -0.000001
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-13",
+      "label": "Guitar 13",
+      "sourcePath": "public/acoustic-guitar/thirteenth.wav",
+      "outputPath": "public/normalized-samples/D/thirteenth.wav",
+      "outputUrl": "/normalized-samples/D/thirteenth.wav",
+      "gainDb": -1,
+      "sourceSha256": "3b293d961c50b19ae02d448b42eec3dfd729b81ecb2b70f5262438ffc7f2a194",
+      "outputSha256": "0d63127d4584b9eac6de1331a9f2fc07f0b6ef64c61ceb59afced26103813cc3",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.425187,
+        "sizeBytes": 986534
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": -0.000001,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -14.67614,
+        "dcOffset": 0.000001
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 3.425187,
+        "sizeBytes": 986522
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.000002,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -15.67614,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-14",
+      "label": "Guitar 14",
+      "sourcePath": "public/acoustic-guitar/fourteenth.wav",
+      "outputPath": "public/normalized-samples/D/fourteenth.wav",
+      "outputUrl": "/normalized-samples/D/fourteenth.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "32d9be359bd4e8be941fbb22dabb775871e6faf4ec7e9b480b7b7a626d38f8ab",
+      "outputSha256": "627039206c52b3b1fdd2858a351a6a887616cac82b35e4b0e26a1c471aa2f65b",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.788125,
+        "sizeBytes": 227060
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -17.534544,
+        "dcOffset": 0.000024
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.788125,
+        "sizeBytes": 227048
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.01,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -18.544545,
+        "dcOffset": 0.000021
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-15",
+      "label": "Guitar 15",
+      "sourcePath": "public/acoustic-guitar/fifteenth.wav",
+      "outputPath": "public/normalized-samples/D/fifteenth.wav",
+      "outputUrl": "/normalized-samples/D/fifteenth.wav",
+      "gainDb": -1,
+      "sourceSha256": "7291fd6aa76f887ddd9a8653c139386532cb1b7a362d6fea30293299ea2be38b",
+      "outputSha256": "d411ed6e4ce5e446d03a48355cc25dab8edf1a0130d45e8b16677d47034fb3bf",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.889813,
+        "sizeBytes": 256346
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0,
+        "rmsDbfs": -19.069482,
+        "dcOffset": 0
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 0.889813,
+        "sizeBytes": 256334
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -20.069483,
+        "dcOffset": 0
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    },
+    {
+      "bank": "D",
+      "padId": "pad-16",
+      "label": "Guitar 16",
+      "sourcePath": "public/acoustic-guitar/sixteenth.wav",
+      "outputPath": "public/normalized-samples/D/sixteenth.wav",
+      "outputUrl": "/normalized-samples/D/sixteenth.wav",
+      "gainDb": -1.01,
+      "sourceSha256": "157d4cf1ea44b72fd88aa3c51ba9cf201370af117a86301422d45d2a844c27e8",
+      "outputSha256": "af0acf40a1645d127e1e3ef3f798a4a6a59503224f18d1c6df4f97446d0f44cf",
+      "source": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 2.300812,
+        "sizeBytes": 662714
+      },
+      "sourceLevels": {
+        "samplePeakDbfs": 0,
+        "truePeakDbtp": 0.01,
+        "rmsDbfs": -13.432655,
+        "dcOffset": -0.000003
+      },
+      "normalized": {
+        "codec": "pcm_s24le",
+        "sampleFormat": "s32",
+        "sampleRate": 48000,
+        "channels": 2,
+        "durationSeconds": 2.300812,
+        "sizeBytes": 662702
+      },
+      "normalizedLevels": {
+        "samplePeakDbfs": -1.01,
+        "truePeakDbtp": -1,
+        "rmsDbfs": -14.442655,
+        "dcOffset": -0.000003
+      },
+      "validation": {
+        "passed": true,
+        "durationDeltaSeconds": 0,
+        "targetDeltaDb": 0,
+        "sampleRatePreserved": true,
+        "channelsPreserved": true
+      }
+    }
+  ]
+}

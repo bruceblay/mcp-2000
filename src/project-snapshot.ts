@@ -82,6 +82,7 @@ export type ProjectSnapshot = {
 // ---------------------------------------------------------------------------
 
 const FIXTURE_PATH_PREFIXES = [
+  '/normalized-samples/',
   '/mock-samples/',
   '/kraftwerk-kit/',
   '/ice-kit/',

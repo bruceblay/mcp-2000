@@ -16,6 +16,16 @@ export type Pad = {
 
 export type BankKitId = 'A' | 'B' | 'C' | 'D'
 
+const normalizedBasePathBySource = {
+  '/mock-samples/': '/normalized-samples/A/',
+  '/kraftwerk-kit/': '/normalized-samples/B/',
+  '/ice-kit/': '/normalized-samples/C/',
+  '/acoustic-guitar/': '/normalized-samples/D/',
+} as const
+
+const getNormalizedSampleFile = (sampleFile: string) =>
+  sampleFile.replace(/\.[^.]+$/, '.wav')
+
 const createPad = (
   id: string,
   label: string,
@@ -32,7 +42,9 @@ const createPad = (
   group,
   sampleName,
   sampleFile,
-  sampleUrl: basePath + encodeURIComponent(sampleFile),
+  sampleUrl:
+    (normalizedBasePathBySource[basePath as keyof typeof normalizedBasePathBySource] ?? basePath)
+    + encodeURIComponent(getNormalizedSampleFile(sampleFile)),
   sourceType: 'uploaded',
   durationLabel: 'fixture audio',
   gain,
