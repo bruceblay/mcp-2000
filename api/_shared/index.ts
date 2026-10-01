@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
-import { generateText, tool } from 'ai'
+import { generateText, Output } from 'ai'
 import { z } from 'zod'
 
 // --- Types (mirrored from src/mock-kit.ts to avoid cross-boundary imports) ---
@@ -241,6 +241,14 @@ export type GenerateKitResult =
 
 // --- Orchestrators ---
 
+const PLANNER_MODEL = 'claude-sonnet-5-5'
+const PLANNER_PROVIDER_OPTIONS = {
+  anthropic: { thinking: { type: 'between_tools' }, effort: 'medium' },
+} as const
+
+// Sonnet 5.5 rejects forced tool choice and sampling parameters. These planners
+// only return data, so use native structured output with the existing schemas.
+
 export async function executeGenerateKit(
   anthropicApiKey: string,
   elevenLabsApiKey: string,
@@ -260,9 +268,9 @@ export async function executeGenerateKit(
     }
 
     const sequenceResult = await generateText({
-      model: anthropic('claude-sonnet-4-5'),
-      temperature: isRandomSequence ? 1 : 0.8,
-      toolChoice: { type: 'tool', toolName: 'submitSequencePlan' },
+      model: anthropic(PLANNER_MODEL),
+      providerOptions: PLANNER_PROVIDER_OPTIONS,
+      output: Output.object({ schema: sequencePlanSchema }),
       system: [
         isRandomSequence
           ? 'You are designing a musically useful but genuinely surprising step pattern for an MPC-inspired sampler.'
@@ -274,26 +282,14 @@ export async function executeGenerateKit(
         isRandomSequence
           ? 'Favor asymmetry, syncopation, surprise, and variation while keeping the result playable.'
           : 'Favor musical patterns with space, repetition, and sensible roles.',
-        'You must call submitSequencePlan exactly once.',
+        'Return exactly one JSON object matching the supplied schema.',
       ].join(' '),
       prompt: isRandomSequence
         ? buildRandomSequencePlannerPrompt(parsedRequest.prompt, sequenceLength, sequencePads)
         : buildSequencePlannerPrompt(parsedRequest.prompt, sequenceLength, sequencePads),
-      tools: {
-        submitSequencePlan: tool({
-          description: 'Submit a step sequence plan for the current bank.',
-          inputSchema: sequencePlanSchema,
-          execute: async (input) => input,
-        }),
-      },
     })
 
-    const toolResult = sequenceResult.toolResults.find((entry) => entry.toolName === 'submitSequencePlan')
-    if (!toolResult || toolResult.type !== 'tool-result') {
-      throw new Error('Sequence planner did not return a valid pattern.')
-    }
-
-    const output = sequencePlanSchema.parse(toolResult.output)
+    const output = sequenceResult.output
     return {
       type: 'sequence',
       bankId: parsedRequest.bankId,
@@ -310,31 +306,19 @@ export async function executeGenerateKit(
     }
 
     const loopResult = await generateText({
-      model: anthropic('claude-sonnet-4-5'),
-      temperature: 0.85,
-      toolChoice: { type: 'tool', toolName: 'submitLoopPlan' },
+      model: anthropic(PLANNER_MODEL),
+      providerOptions: PLANNER_PROVIDER_OPTIONS,
+      output: Output.object({ schema: loopPlanSchema }),
       system: [
         'You are designing a loop for an MPC-inspired sampler workflow.',
         'Return one cohesive loop plan that will be good for chopping into pads.',
         'The loop should be stylistically committed and sampleable, not generic background filler.',
-        'You must call submitLoopPlan exactly once.',
+        'Return exactly one JSON object matching the supplied schema.',
       ].join(' '),
       prompt: buildLoopPlannerPrompt(parsedRequest.prompt),
-      tools: {
-        submitLoopPlan: tool({
-          description: 'Submit one loop-generation plan for a chop-ready sample.',
-          inputSchema: loopPlanSchema,
-          execute: async (input) => input,
-        }),
-      },
     })
 
-    const toolResult = loopResult.toolResults.find((entry) => entry.toolName === 'submitLoopPlan')
-    if (!toolResult || toolResult.type !== 'tool-result') {
-      throw new Error('Loop planner did not return a valid generation plan.')
-    }
-
-    const output = loopPlanSchema.parse(toolResult.output)
+    const output = loopResult.output
     const audioBuffer = await generateElevenLabsSample(elevenLabsApiKey, {
       prompt: output.loop.prompt,
       durationSeconds: output.loop.durationSeconds,
@@ -372,32 +356,20 @@ export async function executeGenerateKit(
     }
 
     const padResult = await generateText({
-      model: anthropic('claude-sonnet-4-5'),
-      temperature: 0.9,
-      toolChoice: { type: 'tool', toolName: 'submitSinglePadPlan' },
+      model: anthropic(PLANNER_MODEL),
+      providerOptions: PLANNER_PROVIDER_OPTIONS,
+      output: Output.object({ schema: singlePadPlanSchema }),
       system: [
         'You are designing one sampler sound for an MPC-inspired web app.',
         'Make the result stylistically committed and immediately usable.',
         'Return a concise prompt for sound generation plus duration guidance.',
         'Return a descriptive sampleName, not the raw pad label.',
-        'You must call submitSinglePadPlan exactly once.',
+        'Return exactly one JSON object matching the supplied schema.',
       ].join(' '),
       prompt: buildSinglePadPlannerPrompt(parsedRequest.prompt, templatePad),
-      tools: {
-        submitSinglePadPlan: tool({
-          description: 'Submit a generation plan for the selected pad.',
-          inputSchema: singlePadPlanSchema,
-          execute: async (input) => input,
-        }),
-      },
     })
 
-    const toolResult = padResult.toolResults.find((entry) => entry.toolName === 'submitSinglePadPlan')
-    if (!toolResult || toolResult.type !== 'tool-result') {
-      throw new Error('Pad planner did not return a valid generation plan.')
-    }
-
-    const output = singlePadPlanSchema.parse(toolResult.output)
+    const output = padResult.output
     const audioBuffer = await generateElevenLabsSample(elevenLabsApiKey, output.sample)
     const fileName = Date.now() + '-' + templatePad.id + '-' + slugify(output.sample.sampleName) + '.mp3'
 
@@ -423,32 +395,20 @@ export async function executeGenerateKit(
   }
 
   const planResult = await generateText({
-    model: anthropic('claude-sonnet-4-5'),
-    temperature: 0.85,
-    toolChoice: { type: 'tool', toolName: 'submitKitPlan' },
+    model: anthropic(PLANNER_MODEL),
+    providerOptions: PLANNER_PROVIDER_OPTIONS,
+    output: Output.object({ schema: kitPlanSchema }),
     system: [
       'You are designing a full 16-pad sampler bank for an MPC-inspired web app.',
       'Return one generation plan for every pad role in the bank.',
       'The bank should feel coherent and inspired by the user prompt, but the individual pads should still have variety and personality.',
       'Return descriptive sample names, not generic role labels.',
-      'You must call submitKitPlan exactly once.',
+      'Return exactly one JSON object matching the supplied schema.',
     ].join(' '),
     prompt: buildKitPlannerPrompt(parsedRequest.prompt),
-    tools: {
-      submitKitPlan: tool({
-        description: 'Submit the 16-pad generation plan for the full bank.',
-        inputSchema: kitPlanSchema,
-        execute: async (input) => input,
-      }),
-    },
   })
 
-  const toolResult = planResult.toolResults.find((entry) => entry.toolName === 'submitKitPlan')
-  if (!toolResult || toolResult.type !== 'tool-result') {
-    throw new Error('Kit planner did not return a valid generation plan.')
-  }
-
-  const output = kitPlanSchema.parse(toolResult.output)
+  const output = planResult.output
   const generatedPads = await mapWithConcurrency(output.samples, 4, async (samplePlan) => {
     const templatePad = allTemplatePads.find((pad) => pad.id === samplePlan.padId)
     if (!templatePad) {

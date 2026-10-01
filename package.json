@@ -11,7 +11,7 @@
     "samples:normalize": "node scripts/normalize-default-samples.mjs"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.64",
+    "@ai-sdk/anthropic": "^3.0.127",
     "@google-cloud/firestore": "^8.3.0",
     "@google-cloud/storage": "^7.19.0",
     "@radix-ui/react-slider": "^1.3.6",
