@@ -40,7 +40,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   const result = streamText({
-    model: anthropic('claude-haiku-4-5-20251001'),
+    model: anthropic('claude-sonnet-5-5'),
+    providerOptions: {
+      anthropic: { thinking: { type: 'between_tools' }, effort: 'low' },
+    },
     system: CHAT_SYSTEM_PROMPT,
     messages,
     maxOutputTokens: 1000,

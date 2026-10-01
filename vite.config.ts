@@ -141,7 +141,10 @@ export default defineConfig(({ mode }) => {
 
       const anthropic = createAnthropic({ apiKey: env.ANTHROPIC_API_KEY })
       const result = streamText({
-        model: anthropic('claude-haiku-4-5-20251001'),
+        model: anthropic('claude-sonnet-5-5'),
+        providerOptions: {
+          anthropic: { thinking: { type: 'between_tools' }, effort: 'low' },
+        },
         system: CHAT_SYSTEM_PROMPT,
         messages: messages as Array<{ role: 'user' | 'assistant'; content: string }>,
       })
