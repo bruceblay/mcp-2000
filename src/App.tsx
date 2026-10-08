@@ -49,6 +49,13 @@ import { GenerationPanel } from './components/GenerationPanel'
 import { Knob } from './components/Knob'
 import { Tooltip, TooltipProvider } from './components/Tooltip'
 
+const playbackModeLabels = {
+  'one-shot': 'One-shot',
+  'gate-loop': 'Gate loop',
+  gate: 'Gate',
+  loop: 'Loop',
+} as const
+
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(false)
   const [isChatOpen, setIsChatOpen] = useState(false)
@@ -4567,7 +4574,7 @@ const isLoopEditorActive = editorSource === 'loop' && Boolean(generatedLoop)
                             className={playbackMode === mode ? 'playback-mode-button is-current' : 'playback-mode-button'}
                             onClick={() => updatePlaybackMode(selectedPad.id, mode)}
                           >
-                            {mode}
+                            {playbackModeLabels[mode]}
                           </button>
                         ))}
                       </div>
