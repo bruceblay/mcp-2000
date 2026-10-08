@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { nanoid } from 'nanoid'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { X, Send, RotateCcw } from 'lucide-react'
@@ -14,6 +15,8 @@ type ChatPanelProps = {
 export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const { chatWidth, isResizing, startResizing } = useChatPanelResize()
   const [messages, setMessages] = useState<Message[]>([])
+  // Groups this thread's logged turns together server-side. Reset with the chat.
+  const conversationIdRef = useRef(nanoid(12))
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
@@ -60,7 +63,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: updatedMessages }),
+        body: JSON.stringify({ messages: updatedMessages, conversationId: conversationIdRef.current }),
         signal: controller.signal,
       })
 
@@ -145,7 +148,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
           <button
             type="button"
             className="chat-panel-icon-button"
-            onClick={() => { setMessages([]); setInput('') }}
+            onClick={() => { setMessages([]); setInput(''); conversationIdRef.current = nanoid(12) }}
             disabled={messages.length === 0}
             aria-label="Reset chat"
             title="New chat"

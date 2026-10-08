@@ -215,6 +215,32 @@ Logs prompts from all five sources:
 - `generate-sequence` — sequence pattern generation
 - `transform-sample` — sample editor ElevenLabs transform
 
+### Admin: Chat Log
+
+`GET /api/shares/chats` returns recent chat panel activity, grouped into
+threads. Protected by the `CRON_SECRET` bearer token.
+
+```bash
+curl -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  https://www.mcp2000.com/api/shares/chats?limit=200
+```
+
+Only the user's own turns are recorded. Assistant replies are not stored.
+Each thread is keyed by a `conversationId` the client generates per session
+and regenerates when someone starts a new chat, so turns group together
+without anything identifying being written.
+
+Entries carry an `expiresAt` 90 days out. That field does nothing until the
+TTL policy is enabled once per project:
+
+```bash
+gcloud firestore fields ttls update expiresAt \
+  --collection-group=chat_logs --enable-ttl --project=mcp-2000
+```
+
+Without that command the logs accumulate indefinitely.
+
+
 Each entry includes the source, prompt text, timestamp, and relevant metadata
 (bank ID, mode, sample name, etc.). Logging is fire-and-forget — it never
 blocks or slows down the generation request.

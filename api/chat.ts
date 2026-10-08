@@ -4,6 +4,7 @@ import { streamText } from 'ai'
 import { z } from 'zod'
 import { CHAT_SYSTEM_PROMPT } from './_shared/index.js'
 import { applyRateLimit } from './_shared/rate-limit.js'
+import { logChatMessage } from './_shared/db.js'
 
 export const config = { maxDuration: 60 }
 
@@ -14,6 +15,8 @@ const chatRequestSchema = z.object({
     role: z.enum(['user', 'assistant']),
     content: z.string().min(1).max(4000),
   })).min(1).max(50),
+  /** Client-generated per-thread id, so logged turns can be grouped. */
+  conversationId: z.string().min(1).max(64).optional(),
 })
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -35,7 +38,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const { messages } = parsed.data
+  const { messages, conversationId } = parsed.data
+
+  // Log the newest user turn. The client resends the whole thread each time,
+  // so only the last message is new; anything earlier is already recorded.
+  const latest = messages[messages.length - 1]
+  if (latest?.role === 'user') {
+    const turnIndex = messages.filter((m) => m.role === 'user').length - 1
+    logChatMessage(conversationId ?? 'unknown', latest.content, turnIndex)
+  }
 
   const anthropic = createAnthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 

@@ -22,6 +22,7 @@ const getDb = (): Firestore => {
 const projects = () => getDb().collection('shared_projects')
 const samples = () => getDb().collection('shared_samples')
 const promptLogs = () => getDb().collection('prompt_logs')
+const chatLogs = () => getDb().collection('chat_logs')
 
 // ---------------------------------------------------------------------------
 // Prompt logging (fire-and-forget)
@@ -36,6 +37,55 @@ export const logPrompt = (source: PromptLogSource, prompt: string, metadata?: Re
     ...metadata,
     createdAt: Timestamp.now(),
   }).catch(() => {}) // fire-and-forget, never block the request
+}
+
+// ---------------------------------------------------------------------------
+// Chat logging (fire-and-forget)
+// ---------------------------------------------------------------------------
+
+/** Chat transcripts are browsable for this long, then Firestore TTL drops them. */
+const CHAT_LOG_TTL_SECONDS = 90 * 24 * 60 * 60 // 90 days
+
+/**
+ * Records a single user turn from the chat panel.
+ *
+ * Only the user's own message is stored. Assistant replies are not logged:
+ * they are reproducible from the prompt and would double the volume.
+ * `conversationId` is generated client-side per thread so turns can be
+ * grouped back together without storing anything identifying.
+ */
+export const logChatMessage = (conversationId: string, message: string, turnIndex: number) => {
+  chatLogs().add({
+    conversationId,
+    message,
+    turnIndex,
+    createdAt: Timestamp.now(),
+    expiresAt: Timestamp.fromMillis(Date.now() + CHAT_LOG_TTL_SECONDS * 1000),
+  }).catch(() => {}) // fire-and-forget, never block the stream
+}
+
+export type ChatLogEntry = {
+  conversationId: string
+  message: string
+  turnIndex: number
+  createdAt: number
+}
+
+export const listRecentChats = async (limit = 200): Promise<ChatLogEntry[]> => {
+  const snapshot = await chatLogs()
+    .orderBy('createdAt', 'desc')
+    .limit(limit)
+    .get()
+
+  return snapshot.docs.map((doc) => {
+    const data = doc.data()
+    return {
+      conversationId: data.conversationId as string,
+      message: data.message as string,
+      turnIndex: data.turnIndex as number,
+      createdAt: (data.createdAt as Timestamp).toMillis(),
+    }
+  })
 }
 
 // ---------------------------------------------------------------------------
