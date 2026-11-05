@@ -199,6 +199,7 @@ const generateElevenLabsSample = async (
       Accept: 'audio/mpeg',
     },
     body: JSON.stringify({
+      model_id: 'eleven_text_to_sound_v3',
       text: planItem.prompt,
       duration_seconds: planItem.durationSeconds,
       prompt_influence: planItem.promptInfluence,
